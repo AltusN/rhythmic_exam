@@ -9,6 +9,10 @@ __pycache__/
 .pytest_cache/
 .coverage
 .tox/
+*.egg-info/
+
+# Legacy Flask app artifacts
+legacy/flask_backend/logs/
 
 # Environment files
 .*env
