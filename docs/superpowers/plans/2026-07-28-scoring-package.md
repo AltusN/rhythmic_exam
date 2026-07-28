@@ -103,7 +103,7 @@ Expected: 1 passed.
 
 ```bash
 git add pyproject.toml scoring/ tests/
-git commit -m "Add scoring package skeleton and pytest setup"
+git commit -m "chore(scoring): add package skeleton and pytest setup"
 ```
 
 **Review gate:** Claude checks the `pyproject.toml` before you move on.
@@ -173,7 +173,7 @@ Expected: 9 passed.
 
 ```bash
 git add scoring/values.py tests/test_values.py
-git commit -m "Add answer normalisation with Decimal comparison"
+git commit -m "feat(scoring): normalise answers to Decimal before comparison (F3)"
 ```
 
 **Review gate:** Claude reviews. Expect pushback if you used `float` anywhere, or
@@ -264,7 +264,7 @@ Expected: 8 passed.
 
 ```bash
 git add scoring/types.py scoring/tables.py tests/test_tables.py
-git commit -m "Add two-dimensional band lookup for marking tables"
+git commit -m "feat(scoring): look up marking tables by band, not exact index (F4)"
 ```
 
 **Review gate:** Claude reviews. This is the task most likely to have an
@@ -338,7 +338,7 @@ Expected: 10 passed.
 
 ```bash
 git add scoring/marking.py tests/test_marking.py tests/conftest.py
-git commit -m "Add per-answer marking for choice and numeric questions"
+git commit -m "feat(scoring): mark choice and numeric answers"
 ```
 
 **Review gate:** Claude reviews, with attention to whether `mark_numeric` grew
@@ -424,7 +424,7 @@ Expected: 12 passed.
 
 ```bash
 git add scoring/aggregate.py scoring/types.py tests/test_aggregate.py
-git commit -m "Add component aggregation and grade banding"
+git commit -m "feat(scoring): average component percentages instead of summing marks (F5)"
 ```
 
 **Review gate:** Claude reviews the rounding decision specifically.
@@ -471,7 +471,7 @@ Expected: everything passes — 41 tests (1 smoke + 9 values + 8 tables + 10 mar
 
 ```bash
 git add scoring/__init__.py tests/test_public_api.py
-git commit -m "Define the public scoring API"
+git commit -m "feat(scoring): define the public API surface"
 ```
 
 ---
@@ -543,7 +543,7 @@ Expected: all pass.
 
 ```bash
 git add scoring/legacy.py tests/test_legacy_parity.py
-git commit -m "Express the legacy SAGF scheme as a marking table with parity tests"
+git commit -m "feat(scoring): express the legacy SAGF scheme as a marking table"
 ```
 
 **Review gate:** Claude reviews, then we run the *old* `get_practical_mark` against

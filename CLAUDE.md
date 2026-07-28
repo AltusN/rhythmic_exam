@@ -81,6 +81,36 @@ new code.
 - **Check `git status` before committing.** `git commit` commits the whole index —
   this already caused a file to be committed after Altus had declined it.
 
+## Commit messages
+
+Conventional Commits, **starting with the first commit after `c0839c5`**. Everything
+up to and including `c0839c5` predates the convention — do not rewrite those messages
+to match.
+
+```
+<type>(<scope>): <imperative subject>
+```
+
+- **Types, closed set:** `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
+  Nothing else. An unbounded type list is the same as no convention.
+- **Scope** is the package or Django app: `scoring`, `questions`, `exams`,
+  `accounts`, `frontend`, `docs`. Omit only when the change is genuinely repo-wide.
+- **Subject:** imperative mood ("add", not "added"/"adds"), lower case after the
+  colon, no trailing full stop, under ~72 characters.
+- **Tests ship with the behaviour they cover**, so they are part of it —
+  `feat(scoring):`, not `test:`. Reserve `test:` for tests added to code that
+  already exists, which is mostly the F6 backfill.
+- **The prefix does not excuse a vague subject.** `chore: project setup` is a bad
+  message with a prefix on it. Say what changed.
+- **Body explains why**, not what — the diff already says what. Wrap at 72.
+- **Cite the finding** when a commit fixes one: `fix(scoring): compare answers as
+  Decimal, not string (F3)`. The findings are the spine of the rebuild and the log
+  should be searchable by them.
+
+No release automation is wired up and none is planned; the prefixes are for humans
+reading the log. There is no `commit-msg` hook yet either — the convention is
+currently held by discipline alone.
+
 ## Current state
 
 The `rhythmic/` directory is empty. Next action is **Task 1** of the scoring plan:
