@@ -40,7 +40,10 @@ nosetests.xml
 venv
 .vscode
 *.db
+# Real exam content stays out of this repo: it is public, and the exports
+# carry the answer key. example_format.csv is synthetic and safe to track.
 *.csv
+!doc/example_format.csv
 *.sqlite
 rhytmic.log*
 
