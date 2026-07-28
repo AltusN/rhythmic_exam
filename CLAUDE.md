@@ -34,7 +34,7 @@ order rather than racing a date.
 
 ## Read these before doing anything
 
-- `docs/superpowers/specs/2026-07-28-rhytmic-exam-rebuild-design.md` — the design.
+- `docs/superpowers/specs/2026-07-28-rhythmic-exam-rebuild-design.md` — the design.
   Includes eight numbered findings (F1–F8) from the old app; each one is a bug the
   rebuild must fix, and several have tests written specifically to pin them.
 - `docs/superpowers/plans/2026-07-28-scoring-package.md` — the current plan.
@@ -59,9 +59,10 @@ The FastAPI backend was deleted on 2026-07-28 (recoverable from `4e6aa1b`,
 
 ## Spelling
 
-The sport is *rhythmic*. The repo, the legacy tree and the old package all spell it
-*rhytmic*. **New code uses the correct spelling.** Don't "fix" the legacy tree, and
-don't propagate the typo into new code.
+The sport is *rhythmic*. The legacy tree and the old package spell it *rhytmic*.
+The repo itself was renamed to `rhythmic_exam` on 2026-07-28. **New code uses the
+correct spelling.** Don't "fix" the legacy tree, and don't propagate the typo into
+new code.
 
 ## Hard constraints
 

@@ -16,7 +16,7 @@ legacy/
 ## Status
 
 Being rebuilt from the ground up. The design is in
-[`docs/superpowers/specs/2026-07-28-rhytmic-exam-rebuild-design.md`](docs/superpowers/specs/2026-07-28-rhytmic-exam-rebuild-design.md);
+[`docs/superpowers/specs/2026-07-28-rhythmic-exam-rebuild-design.md`](docs/superpowers/specs/2026-07-28-rhythmic-exam-rebuild-design.md);
 work is sequenced by the plans in `docs/superpowers/plans/`.
 
 The Flask app under `legacy/` is kept for two things the rebuild still needs: the
@@ -26,9 +26,10 @@ renderers are built.
 
 ## Note on spelling
 
-The sport is *rhythmic*. The original project, its repository, and the legacy code
-all spell it *rhytmic*. New code uses the correct spelling; the legacy tree keeps
-the old one.
+The sport is *rhythmic*. The original project and its legacy code spell it
+*rhytmic*. The repository was renamed to `rhythmic_exam` on 2026-07-28; GitHub
+redirects the old URL, so existing clones keep working. New code uses the correct
+spelling; the legacy tree keeps the old one.
 
 ## Exam content is not in this repository
 
