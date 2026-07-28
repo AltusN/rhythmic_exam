@@ -11,8 +11,9 @@ author, who writes all implementation code.
 
 Two prior implementations exist. Both are reference material only:
 
-- `flask_backend/` — the working 2023 monolith. Source of truth for domain behaviour.
-- `fastapi_backend/` — an incomplete 2026 API port with no frontend.
+- `legacy/flask_backend/` — the working 2023 monolith. Source of truth for domain behaviour.
+- `fastapi_backend/` — an incomplete 2026 API port with no frontend. Deleted 2026-07-28;
+  recoverable from commits `4e6aa1b` and `206ff42`.
 
 Neither is a foundation. Mine them for domain rules, then replace.
 
@@ -120,7 +121,7 @@ One Django project, one deployment, Postgres, with a Vite-built React bundle mou
 single page.
 
 ```
-rhytmic/
+rhythmic/
 ├── config/              # settings, urls, wsgi
 ├── accounts/            # User, JudgeProfile, roster import, allauth, permissions
 ├── questions/           # question bank and content model

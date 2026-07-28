@@ -33,6 +33,14 @@ Three of the eight findings in the spec live here (F3, F4, F5), and a fourth (F6
 is that this code has never had a test. It is also the only part of the system that
 can be built with nothing installed but pytest.
 
+## Where this lives
+
+Everything in this plan is inside `rhythmic/`, and **every path and command below
+is relative to that directory.** Start with `cd rhythmic`.
+
+Note the spelling: the sport is *rhythmic*. New code uses the correct spelling;
+`legacy/flask_backend/` keeps the old one.
+
 ## File structure
 
 ```
@@ -72,7 +80,7 @@ scoring` works from the tests without path hacks.
 
 - [ ] **Step 1: Write `pyproject.toml`**
 
-Must declare: project name `rhytmic-scoring`, `requires-python = ">=3.12"`,
+Must declare: project name `rhythmic-scoring`, `requires-python = ">=3.12"`,
 a `[project.optional-dependencies]` group `dev` containing `pytest`, and
 setuptools configured to find the `scoring` package. No runtime dependencies.
 
@@ -485,7 +493,7 @@ git commit -m "Define the public scoring API"
 package does not change any candidate's result, except where it fixes a bug. Without
 it, "the new system scores differently" is an argument you cannot win.
 
-**The legacy scheme, derived from `flask_backend/rhytmic_exam_app/main/exam_utils.py`:**
+**The legacy scheme, derived from `legacy/flask_backend/rhytmic_exam_app/main/exam_utils.py`:**
 one mark of 5 for an exact match, then `0.25` fewer marks for each `0.05` of
 difference, reaching `0` at a difference of `1.0` and above. As percentages that is
 `100, 95, 90, …, 5` for differences `0.00, 0.05, 0.10, …, 0.95`, then `0`.
