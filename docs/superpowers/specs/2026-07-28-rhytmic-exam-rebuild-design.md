@@ -395,3 +395,72 @@ by everything before it.
    either — but the initial table data must come from whatever SAGF actually publishes.
 2. **Number of candidates per sitting.** Assumed tens. Nothing in this design depends on it,
    but it would confirm Postgres is comfortably oversized rather than necessary.
+
+## Reference — FIG 2025–2028
+
+Source documents, read on 2026-07-28:
+
+- [RG Specific Judges' Rules 2025–2028](https://www.gymnastics.sport/publicdir/rules/files/en_1.3%20-%20RG%20Specific%20Judges'%20Rules%202025-2028%20(mark-up).pdf)
+  — marking tables, evaluation scale, exam composition
+- [General Judges' Rules 2025–2028](https://www.gymnastics.sport/publicdir/rules/files/en_1.2%20-%20General%20Judges'%20Rules%202025-2028.pdf)
+  — category requirements, examination process
+
+### Execution marking (the shape this design targets)
+
+Judges give one total deduction per exercise. The percentage awarded is a
+**two-dimensional** lookup: how far the candidate was from the expert score, *and*
+which band the expert's own deduction fell in. Tolerance widens as the routine gets
+harder to judge.
+
+| Expert's deduction | off by 0.3 | off by 0.9 |
+|---|---|---|
+| ≤ 1.00 | 80% | 0% |
+| 2.1 – 2.5 | 90% | 40% |
+| 3.6 – 4.0 | 100% | 50% |
+
+The component score is the **mean** of per-exercise percentages, over 12 exercises
+for individual and 6 for group.
+
+### Evaluation scale
+
+| Grade | Difficulty (DB/DA) | Artistry / Execution |
+|---|---|---|
+| Excellent | 80–100% | 90–100% |
+| Very Good | 70–79.99% | 80–89.99% |
+| Good | 60–69.99% | 65–79.99% |
+| Pass | 50–59.99% | 50–64.99% |
+| Fail | < 50% | < 50% |
+
+Category 1 requires Difficulty excellent with Artistry and Execution very good;
+Category 4 requires all three at pass.
+
+### Why none of these numbers are in the code
+
+FIG states: *"All those tables are provisional until Intercontinental Course table
+scale is fixed. Once fixed by FIG TC, it will remain for the rest of the cycle."*
+The scale is set by the Technical Committee **after the first examination is sat**,
+then applied for the remaining four years. Any table hardcoded in Python is a
+guaranteed rewrite in 2029.
+
+### Difficulty marking, for whenever it is picked up
+
+Not implemented — Execution only. Recorded so the method does not have to be
+rediscovered.
+
+The candidate lists each difficulty value in chronological order. FIG compares that
+sequence to the expert's using a weighted edit distance ("a modified Levenshtein
+algorithm"), evaluating every order-preserving alignment and taking the one with the
+**lowest** total error for the candidate. Total error then converts to a percentage
+by table. FIG's own worked example:
+
+```
+Expert:      0.6  0.6  0.4  0.0  0.9  0.0  0.9
+Candidate:   0.6  0.5  0.4  0.8  0.5  0.9
+
+alignment 1 → 0.0  0.1  0.0  0.8  0.4  0.9  0.9   = 3.1
+alignment 2 → 0.0  0.1  0.0  0.1  0.5  0.0  0.0   = 0.7   ← chosen
+```
+
+Position-by-position comparison would punish a single omission across every element
+that follows it. Alignment charges for the omission alone. Those two rows make good
+first test cases if this is ever built.
