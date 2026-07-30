@@ -72,7 +72,8 @@ new code.
   questions or answers. The 117 tracked exam images are a known pre-existing
   exposure, to be revisited at media migration.
 - **`rhythmic/scoring/` imports nothing from Django and touches no database.** If a
-  module there needs a framework, the boundary is wrong.
+  module there needs a framework, the boundary is wrong. Enforced by ruff `TID251`,
+  which bans `django`, `sqlalchemy` and `flask` — see Tooling below.
 - **`Decimal` everywhere for marks and deductions, never `float`. Never compare
   answers as strings** — finding F3 is exactly that bug.
 - **Marking tables and grade bands are data, never literals in Python.** FIG
@@ -113,16 +114,48 @@ currently held by discipline alone.
 
 ## Current state
 
-The `rhythmic/` directory is empty. Next action is **Task 1** of the scoring plan:
-Altus writes `rhythmic/pyproject.toml`, installs it editable, and gets one smoke
-test passing.
+Tasks 1 and 2 of the scoring plan are done, plus tooling. As of 2026-07-30:
 
-He was advised to create a **fresh virtualenv** for `rhythmic/` rather than reuse
-the root `.venv`, which still has Flask and SQLAlchemy in it and would let
-`import flask` succeed inside the supposedly framework-free package.
+- `c0839c5` — package skeleton, editable install, smoke test.
+- `58e94d8` — `scoring/values.py`, fixes F3. `to_decimal` returns `None` for blank,
+  whitespace-only and `None`; raises `UnparseableAnswer` for garbage **and** for
+  non-finite values (`nan`, `Infinity`, which `Decimal` otherwise accepts happily).
+  A blank is the candidate's own choice; unreadable input is a fault someone must
+  see. Conflating them hides data errors in results.
+- `b3bb4f2` — ruff.
+
+18 tests pass and `ruff check .` is clean. Run both from `rhythmic/`.
+
+**Next action is Task 3**: `scoring/types.py`, `scoring/tables.py`, band lookup,
+fixes F4. Tests first. The two cases that decide it are `difference = 0.1` — lands
+in the *second* column, bands are half-open — and `expert = 1.9`, which falls back
+to the *first* row. Get either backwards and the mark stays plausible instead of
+crashing, so nothing announces the bug.
 
 Each task in the plan ends at a **review gate**. He posts the code; you review it
 before he starts the next task.
+
+### Environment
+
+The root `.venv` is the one in use, and it is now clean — Flask and SQLAlchemy are
+gone, so `import flask` fails inside `scoring/` as intended. Earlier advice to build
+a separate venv for `rhythmic/` is moot; don't repeat it. `rhythmic-scoring` is
+installed editable, with pytest and ruff from the `dev` extra.
+
+### Tooling
+
+Ruff lints and formats, configured in `rhythmic/pyproject.toml`. The rule set is
+chosen, not defaulted: `E W F I UP C4 B TID RET BLE SIM`, with `E501` ignored
+because the formatter owns line length. `RET` and `BLE` are in because both caught
+real bugs in `values.py`; ruff's stock selection would have caught neither.
+
+**Never run ruff from the repo root.** There is no config file there, so it falls
+back to defaults and walks `legacy/` — and `ruff format` rewrites in place. Run it
+from `rhythmic/`.
+
+`ruff check --fix` is not safe to run blind. It once offered to delete the only
+import in the smoke test, which would have left a test that passes even when the
+package is broken. Read the findings before fixing.
 
 ## Open questions, both non-blocking
 
