@@ -1,8 +1,11 @@
 from decimal import Decimal, InvalidOperation
 
+
 class UnparseableAnswer(ValueError):
     """Exception raised when an answer cannot be parsed into a Decimal."""
+
     pass
+
 
 def to_decimal(answer: str | Decimal | None) -> Decimal | None:
     """Convert a string answer to a Decimal, handling commas and slashes."""
@@ -15,7 +18,7 @@ def to_decimal(answer: str | Decimal | None) -> Decimal | None:
         answer = answer.replace(",", ".").replace("/", ".")
         answer = answer.strip()
 
-    try:  
+    try:
         result = Decimal(answer)
     except InvalidOperation as e:
         raise UnparseableAnswer(f"Cannot parse answer: {original_answer}") from e
