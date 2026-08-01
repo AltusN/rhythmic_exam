@@ -114,7 +114,7 @@ currently held by discipline alone.
 
 ## Current state
 
-Tasks 1 and 2 of the scoring plan are done, plus tooling. As of 2026-07-30:
+Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
 
 - `c0839c5` — package skeleton, editable install, smoke test.
 - `58e94d8` — `scoring/values.py`, fixes F3. `to_decimal` returns `None` for blank,
@@ -123,14 +123,29 @@ Tasks 1 and 2 of the scoring plan are done, plus tooling. As of 2026-07-30:
   A blank is the candidate's own choice; unreadable input is a fault someone must
   see. Conflating them hides data errors in results.
 - `b3bb4f2` — ruff.
+- `ea791b9` — `scoring/types.py` and `scoring/tables.py`, fixes F4. `BandRow` and
+  `MarkingTable` are frozen dataclasses; `MarkingTable.lookup` is **keyword-only**,
+  because both arguments are `Decimal` and a positional swap returns a plausible
+  wrong percentage instead of an error. Both dimensions floor into half-open bands
+  via one shared helper, `tables.floor_band_index`, which walks bounds from the top
+  down — so the open-ended top band and the below-the-bottom fallback need no
+  special case, and rows and columns cannot drift apart.
 
-18 tests pass and `ruff check .` is clean. Run both from `rhythmic/`.
+  `MarkingTable.__post_init__` rejects malformed tables at construction, so no
+  invalid table can reach `lookup` by any path. It went beyond the plan: validating
+  in `lookup` would re-answer, on every call, a question the `frozen=True` settles
+  at `__init__`. Ordering is the check that matters — unsorted bounds return a real
+  index and a wrong mark, where every other violation raises `IndexError`.
 
-**Next action is Task 3**: `scoring/types.py`, `scoring/tables.py`, band lookup,
-fixes F4. Tests first. The two cases that decide it are `difference = 0.1` — lands
-in the *second* column, bands are half-open — and `expert = 1.9`, which falls back
-to the *first* row. Get either backwards and the mark stays plausible instead of
-crashing, so nothing announces the bug.
+31 tests pass and `ruff check .` is clean. Run both from `rhythmic/`. **`ruff check`
+and `ruff format` are separate commands** — a clean `check` says nothing about
+formatting, and that gap cost several review rounds on Task 3.
+
+**Next action is Task 4**: `scoring/marking.py` — `mark_choice` and `mark_numeric`.
+Tests first, and Step 1 moves the table fixture into `tests/conftest.py` so Tasks 3
+and 4 share it. `mark_numeric` should stay thin: `to_decimal`, `abs()`, `lookup`.
+Arithmetic accumulating there means logic that belongs in `tables.py`, which is what
+the review gate looks for. `UnparseableAnswer` must propagate rather than mark zero.
 
 Each task in the plan ends at a **review gate**. He posts the code; you review it
 before he starts the next task.
