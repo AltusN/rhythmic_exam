@@ -200,8 +200,12 @@ returned a sentinel number instead of raising.
       difference_steps: tuple[Decimal, ...]   # inclusive lower bound of each column
       rows: tuple[BandRow, ...]               # ascending by expert_minimum
 
-      def lookup(self, expert: Decimal, difference: Decimal) -> Decimal
+      def lookup(self, *, expert: Decimal, difference: Decimal) -> Decimal
   ```
+
+  `lookup` is **keyword-only**. Both arguments are `Decimal`, so a positional
+  call site can swap them silently and return a plausible-but-wrong percentage.
+  Keyword-only turns that mistake into a `TypeError` where it is made.
 
 **Behaviour — this is the important part:**
 
@@ -211,6 +215,15 @@ Both dimensions are **half-open bands**, and both are **open-ended at the top**.
 - The last column covers `[difference_steps[-1], ∞)`.
 - Row selection works identically on `expert_minimum`.
 - A value below the first band uses the first band.
+
+`MarkingTable.__post_init__` rejects a malformed table at construction, so no
+invalid table can reach `lookup` by any path: empty `rows` or `difference_steps`,
+rows not ascending by `expert_minimum`, `difference_steps` not ascending, or any
+row whose `percentages` length differs from the column count. Ordering is the
+check that matters most — `floor_band_index` walks bounds from the top down, so
+unsorted bounds return a real index and a plausible wrong percentage, where every
+other violation raises `IndexError`. Validation lives at construction rather than
+in `lookup` because the table is frozen: the answer cannot change after `__init__`.
 
 **This is the structural fix for F4.** The old code did
 `diff_arr.index(difference)`, which requires an exact hit and raised `ValueError`
@@ -244,6 +257,10 @@ rows:
 | `3.5` | `0.1` | `100` | above top row, uses last |
 | `1.9` | `0.1` | `90` | just below second row, uses first |
 
+Plus one construction test per validation rule, each using `pytest.raises(ValueError,
+match=...)` on a short distinctive fragment — a bare `raises(ValueError)` passes when
+a *different* rule fires, which leaves the rule it names unpinned.
+
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_tables.py -v`
@@ -258,7 +275,7 @@ open-ended top and the below-the-bottom case without special-casing either.
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_tables.py -v`
-Expected: 8 passed.
+Expected: 13 passed — the 8 lookup cases plus 5 construction-validation tests.
 
 - [ ] **Step 5: Commit**
 
@@ -279,7 +296,7 @@ cases.
 - Create: `scoring/marking.py`, `tests/test_marking.py`
 
 **Interfaces:**
-- Consumes: `scoring.values.to_decimal`, `scoring.tables.MarkingTable`
+- Consumes: `scoring.values.to_decimal`, `scoring.types.MarkingTable`
 - Produces:
   ```python
   def mark_choice(response: str | None, correct_option: str) -> Decimal
@@ -465,7 +482,9 @@ Expected: FAIL on `ImportError`.
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `pytest -v`
-Expected: everything passes — 41 tests (1 smoke + 9 values + 8 tables + 10 marking + 12 aggregate + 1 public API).
+Expected: everything passes — 54 tests (1 smoke + 17 values + 13 tables + 10 marking
++ 12 aggregate + 1 public API). The values and tables counts are what those tasks
+actually produced, not what this plan first estimated.
 
 - [ ] **Step 5: Commit**
 
@@ -560,6 +579,10 @@ divergence other than the two documented ones is a bug in the new code.
   Persistence is the next plan's problem.
 - **`score_sitting`.** It needs a `SittingItem`, which does not exist yet. It
   belongs in the plan that introduces the Django models.
+- **Rejecting duplicate `expert_minimum` values.** Two rows sharing a lower bound
+  pass validation, and `floor_band_index` selects the higher index, so the earlier
+  row is unreachable. Dead data that looks live, but never a wrong percentage —
+  unlike mis-ordering, which is why ordering is validated and this is not.
 
 ## Next plans, in order
 
