@@ -116,3 +116,23 @@ def test_post_init_rejects_unsorted_difference_steps():
             ),  # Unsorted
             rows=(row_1,),
         )
+
+
+def test_lookup_with_values_lower_than_all_bounds():
+    row_1 = BandRow(
+        expert_minimum=Decimal("1.0"),
+        percentages=((Decimal("100"), Decimal("90"), Decimal("80"))),
+    )
+    row_2 = BandRow(
+        expert_minimum=Decimal("2.0"),
+        percentages=((Decimal("70"), Decimal("60"), Decimal("50"))),
+    )
+
+    mark_table = MarkingTable(
+        difference_steps=(Decimal("0.1"), Decimal("0.2"), Decimal("0.3")),
+        rows=(row_1, row_2),
+    )
+
+    # Expert and difference values lower than all bounds should return the first row and first column
+    result = mark_table.lookup(expert=Decimal("0.5"), difference=Decimal("0.0"))
+    assert result == Decimal("100")  # First row, first column
