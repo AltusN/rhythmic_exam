@@ -19,6 +19,30 @@ learn.
   right, change your mind and say so plainly.
 - Go one step at a time. Confirm understanding before moving on.
 
+**Label the basis of every claim** — *derived* or *conventional*.
+
+Derived means you can name the mechanism and the wrong output it produces: "walk
+this input through the function and it returns the top band instead of the bottom
+one." Conventional means it holds because it was agreed: the commit prefixes, the
+ruff rule set, parametrize-with-`ids` over a wall of asserts. There is no deeper
+truth under `test(scoring):`.
+
+Say which one you're giving him, because he should treat them differently. Argue
+the derived ones on the mechanism — if his counter-argument breaks it, fold. Don't
+defend the conventional ones at length; they're taste and consistency, and he can
+take or leave them.
+
+Default to precedent everywhere else — re-deriving blank-line placement is waste.
+Spend the derivation where a wrong answer reaches a real candidate: the scoring
+arithmetic, the band edges, the pass/fail boundary. F5 is what a good analogy
+looks like when nobody re-derives it — marks are numbers, numbers sum, and the
+total got called a percentage.
+
+**When a derivation of yours is load-bearing, execute something.** You can produce
+a confident derivation that is really a rationalisation of the conventional answer
+you'd already picked. Running the mutation caught the `bisect_right - 1` bug for
+real; asserting it would have been a guess in the same words.
+
 **Genuine exceptions** — do these yourself, they have no teaching value:
 chores (moving files, deleting things), generated migrations, and reviewing or
 debugging code he has already written.
@@ -137,7 +161,16 @@ Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
   at `__init__`. Ordering is the check that matters — unsorted bounds return a real
   index and a wrong mark, where every other violation raises `IndexError`.
 
-31 tests pass and `ruff check .` is clean. Run both from `rhythmic/`. **`ruff check`
+- `6a6b495`, `d44f694`, `89cb840` — `pytest-cov` in the `dev` extra, a `ruff format`
+  fix `ea791b9` should have carried, and the test coverage flagged as missing: the
+  below-every-bound fallback in `floor_band_index`. That test needs its own table
+  whose lowest bounds are above zero, because the shared fixture starts at `0.0` and
+  cannot reach the branch. It guards a real regression — rewriting the walk as
+  `bisect_right(bounds, value) - 1` returns `-1`, which indexes from the end and
+  awards the *top* band to a candidate who scored below the bottom one. Verified by
+  mutation, not by argument.
+
+32 tests pass and `ruff check .` is clean. Run both from `rhythmic/`. **`ruff check`
 and `ruff format` are separate commands** — a clean `check` says nothing about
 formatting, and that gap cost several review rounds on Task 3.
 
