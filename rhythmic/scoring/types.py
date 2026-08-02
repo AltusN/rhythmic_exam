@@ -9,6 +9,7 @@ class BandRow:
     expert_minimum: Decimal
     percentages: tuple[Decimal, ...]
 
+
 @dataclass(frozen=True)
 class MarkingTable:
     """
