@@ -133,8 +133,9 @@ to match.
   should be searchable by them.
 
 No release automation is wired up and none is planned; the prefixes are for humans
-reading the log. There is no `commit-msg` hook yet either — the convention is
-currently held by discipline alone.
+reading the log. There is no `commit-msg` hook — **this convention is held by
+discipline alone.** The `pre-commit` hook added on 2026-08-04 enforces ruff, and
+says nothing whatever about commit messages; don't mistake one for the other.
 
 ## Current state
 
@@ -204,6 +205,22 @@ from `rhythmic/`.
 `ruff check --fix` is not safe to run blind. It once offered to delete the only
 import in the smoke test, which would have left a test that passes even when the
 package is broken. Read the findings before fixing.
+
+**Formatting is enforced by a pre-commit hook**, `.githooks/pre-commit`, added on
+2026-08-04 after `ruff format` was forgotten before a commit twice — once on Task 3
+(`d44f694`) and once on Task 5. It runs `ruff format --check` and `ruff check` from
+`rhythmic/` on the `.py` files **staged for that commit**, reports both before
+aborting, and blocks rather than reformatting: a hook that edits your index puts
+content in the commit you never read.
+
+- It is **not** picked up by a fresh clone. `core.hooksPath` is local config, so
+  each clone needs `git config core.hooksPath .githooks` once.
+- Unstaged work in progress does not block a commit — only staged files are checked.
+- It deliberately does **not** run pytest. A slow hook is a hook that gets
+  `--no-verify`'d. Tests stay a separate gate.
+- It checks working-tree files by path, not staged blobs, so `git add -p` on half a
+  file validates content that isn't what's committed. Known and accepted; the
+  `git stash --keep-index` fix can lose work when a hook exits badly.
 
 ## Open questions, both non-blocking
 
