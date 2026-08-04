@@ -60,3 +60,9 @@ class MarkingTable:
         )
 
         return self.rows[row_index].percentages[column_index]
+
+
+@dataclass(frozen=True)
+class GradeBand:
+    name: str
+    minimum: Decimal  # inclusive
