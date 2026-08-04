@@ -1,0 +1,54 @@
+#!/bin/sh
+# Blocks a commit when rhythmic/ is not ruff-clean.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Ruff runs from rhythmic/, never the repo root: there is no config file at the
+# root, so ruff would fall back to its defaults and walk legacy/.
+#
+# Deliberately does NOT run the test suite. That is a slower, separate gate --
+# a commit hook you start dreading is a commit hook you start bypassing.
+#
+# Bypass with `git commit --no-verify` when you mean to.
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+
+# Only the Python files staged for THIS commit. Checking all of rhythmic/ would
+# block a finished commit because of unrelated work in progress elsewhere.
+staged=$(git diff --cached --name-only --diff-filter=ACMR | grep '^rhythmic/.*\.py$' || true)
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+# Paths relative to rhythmic/, which is where ruff has to run from.
+files=$(printf '%s\n' "$staged" | sed 's|^rhythmic/||')
+
+if [ -x "$repo_root/.venv/bin/ruff" ]; then
+    ruff="$repo_root/.venv/bin/ruff"
+elif command -v ruff >/dev/null 2>&1; then
+    ruff=ruff
+else
+    echo "pre-commit: ruff not found in .venv/bin or on PATH." >&2
+    echo "            install the dev extra, or commit with --no-verify." >&2
+    exit 1
+fi
+
+cd "$repo_root/rhythmic"
+
+# Unquoted on purpose: $files is a newline-separated list ruff takes as argv.
+status=0
+"$ruff" format --check $files || status=1
+"$ruff" check $files || status=1
+
+if [ "$status" -ne 0 ]; then
+    echo >&2
+    echo "pre-commit: rhythmic/ is not ruff-clean, commit aborted." >&2
+    echo "  formatting:  cd rhythmic && ../.venv/bin/ruff format ." >&2
+    echo "  lint:        cd rhythmic && ../.venv/bin/ruff check ." >&2
+    echo "  then re-stage. Do not run 'check --fix' blind; read the findings." >&2
+fi
+
+exit $status
