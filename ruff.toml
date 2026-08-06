@@ -1,0 +1,12 @@
+# Root guard, not a rule set.
+#
+# The real ruff configuration lives in rhythmic/pyproject.toml, and ruff resolves
+# the nearest config per file, so rhythmic/ still lints under its own selection
+# no matter which directory you invoke ruff from.
+#
+# This file exists only so that a ruff run started at the repo root cannot reach
+# legacy/. That tree is reference material and must not be rewritten -- a stray
+# `ruff check --fix` from here once reordered its imports and converted .format()
+# calls to f-strings across 25 files.
+
+extend-exclude = ["legacy"]

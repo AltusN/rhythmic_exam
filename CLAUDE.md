@@ -198,9 +198,19 @@ chosen, not defaulted: `E W F I UP C4 B TID RET BLE SIM`, with `E501` ignored
 because the formatter owns line length. `RET` and `BLE` are in because both caught
 real bugs in `values.py`; ruff's stock selection would have caught neither.
 
-**Never run ruff from the repo root.** There is no config file there, so it falls
-back to defaults and walks `legacy/` — and `ruff format` rewrites in place. Run it
-from `rhythmic/`.
+**Run ruff from `rhythmic/`.** That is where the rule set lives and where the hook
+runs it.
+
+The root `ruff.toml` added on 2026-08-05 is a **guard, not a rule set** — one
+`extend-exclude = ["legacy"]` line. Before it existed there was no config at the
+root, so a run started there fell back to ruff's defaults and walked `legacy/`;
+a stray `ruff check --fix` rewrote 25 reference files, reordering imports and
+converting `.format()` calls to f-strings, `exam_utils.py` among them. Recovered
+with `git restore legacy/`, since the tree was committed.
+
+Ruff resolves the nearest config per file, so `rhythmic/` lints under its own
+selection regardless of where you invoke from — the root file changes what ruff
+is *allowed to reach*, never how it judges anything.
 
 `ruff check --fix` is not safe to run blind. It once offered to delete the only
 import in the smoke test, which would have left a test that passes even when the
