@@ -9,9 +9,19 @@ to be **stern** about holding him to it. The goal is that he understands the sta
 at the end, not that the app gets built fast. Code you write is code he doesn't
 learn.
 
-- Explain the concept and the *why*, then hand him the keyboard.
 - Small snippets to illustrate a pattern are fine. Whole files and whole features
   are not.
+- **Concrete first, theory on demand.** Open with what the file contains and what to
+  type. Keep the derivation for the review, or for when he asks for it. Task 6
+  stalled because two pages on `hasattr`-versus-top-level-import arrived before he
+  knew what `__init__.py` was supposed to hold; restating it as "two small files,
+  here is what goes in each" unstuck him in one message. The reasoning was right and
+  the ordering was wrong.
+- **Name the mechanics explicitly.** Asked where he gets stuck (2026-08-05) he said
+  turning a described shape into code, and knowing which Python or pytest construct
+  to reach for — not the concepts. So say the construct: `max(..., key=...)`, the
+  flat-list form of `parametrize`, `Decimal.quantize`. One line, in isolation or on
+  unrelated content, is a snippet and not a solution. He still writes the file.
 - If he asks you to "just write it" out of impatience, **decline and hand it back.**
   He pre-authorised you refusing that.
 - **Push back on his ideas** with concrete technical reasoning. Disagreement is the
@@ -139,7 +149,22 @@ says nothing whatever about commit messages; don't mistake one for the other.
 
 ## Current state
 
-Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
+Tasks 1–6 of the scoring plan are done, plus tooling. As of 2026-08-05, **72 tests
+pass** and both `ruff check .` and `ruff format --check .` are clean. Run all three
+from `rhythmic/`.
+
+| file | tests |
+|---|---|
+| `test_values.py` | 17 |
+| `test_aggregate.py` | 18 |
+| `test_tables.py` | 14 |
+| `test_marking.py` | 12 |
+| `test_public_api.py` | 10 |
+| `test_smoke.py` | 1 |
+
+**The plan's own test-count estimates are stale** — it predicts 54 by Task 6. Tasks
+4 and 5 both grew cases beyond its table. Don't chase the plan's numbers; they were
+written before the tests were.
 
 - `c0839c5` — package skeleton, editable install, smoke test.
 - `58e94d8` — `scoring/values.py`, fixes F3. `to_decimal` returns `None` for blank,
@@ -148,7 +173,7 @@ Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
   A blank is the candidate's own choice; unreadable input is a fault someone must
   see. Conflating them hides data errors in results.
 - `b3bb4f2` — ruff.
-- `ea791b9` — `scoring/types.py` and `scoring/tables.py`, fixes F4. `BandRow` and
+- `83a1661` — `scoring/types.py` and `scoring/tables.py`, fixes F4. `BandRow` and
   `MarkingTable` are frozen dataclasses; `MarkingTable.lookup` is **keyword-only**,
   because both arguments are `Decimal` and a positional swap returns a plausible
   wrong percentage instead of an error. Both dimensions floor into half-open bands
@@ -163,7 +188,7 @@ Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
   index and a wrong mark, where every other violation raises `IndexError`.
 
 - `6a6b495`, `d44f694`, `89cb840` — `pytest-cov` in the `dev` extra, a `ruff format`
-  fix `ea791b9` should have carried, and the test coverage flagged as missing: the
+  fix `83a1661` should have carried, and the test coverage flagged as missing: the
   below-every-bound fallback in `floor_band_index`. That test needs its own table
   whose lowest bounds are above zero, because the shared fixture starts at `0.0` and
   cannot reach the branch. It guards a real regression — rewriting the walk as
@@ -171,15 +196,57 @@ Tasks 1–3 of the scoring plan are done, plus tooling. As of 2026-08-02:
   awards the *top* band to a candidate who scored below the bottom one. Verified by
   mutation, not by argument.
 
-32 tests pass and `ruff check .` is clean. Run both from `rhythmic/`. **`ruff check`
-and `ruff format` are separate commands** — a clean `check` says nothing about
-formatting, and that gap cost several review rounds on Task 3.
+- `b47f480` — `scoring/marking.py`, Task 4. `mark_numeric` stays thin: `to_decimal`,
+  one subtraction, `abs()`, `lookup`. Every band decision lives in `tables.py` and
+  every parsing decision in `values.py`; that single subtraction is the only
+  arithmetic that is marking's own business. A blank answer marks zero;
+  `UnparseableAnswer` propagates rather than being caught and re-raised. Note that
+  `mark_choice` has no source in the FIG rules — see Open questions.
 
-**Next action is Task 4**: `scoring/marking.py` — `mark_choice` and `mark_numeric`.
-Tests first, and Step 1 moves the table fixture into `tests/conftest.py` so Tasks 3
-and 4 share it. `mark_numeric` should stay thin: `to_decimal`, `abs()`, `lookup`.
-Arithmetic accumulating there means logic that belongs in `tables.py`, which is what
-the review gate looks for. `UnparseableAnswer` must propagate rather than mark zero.
+- `f0cbc33` — `scoring/aggregate.py` plus `GradeBand`, fixes F5. Legacy summed
+  per-item marks and called the total a percentage, which was correct only for
+  exactly 20 items worth 5 marks each; 21 items reports 105%. `score_component` is
+  the arithmetic mean, quantized to 2dp with `ROUND_HALF_UP`.
+
+  **The rounding decision, which is the one that reaches candidates.** `grade`
+  consumes the *rounded* value, so the number shown is the number that decided the
+  grade, and a tie at a band floor resolves in the candidate's favour — `49.99` and
+  `50.00` average to `49.995`, round to `50.00`, and pass. Grading an unrounded
+  value was never available: `Decimal` division already rounds to
+  `getcontext().prec`, so the real choice was 2dp deliberately or 28 significant
+  digits by accident. `ROUND_HALF_UP` versus `ROUND_HALF_EVEN` cannot change a grade
+  against *integer* band floors — reaching one at 2dp needs `X.995`, whose preceding
+  digit is 9 and therefore odd, so half-even rounds up too — but it is pinned by a
+  test regardless, because the displayed number is what a candidate re-checks by
+  hand, and because FIG may publish a non-integer floor.
+
+  `grade` selects the bands the percentage meets and takes the highest minimum,
+  rather than walking a sorted list. Band ordering therefore carries no meaning and
+  the loader owes no sort contract. This holds only while the minimums are distinct
+  — `max` breaks ties by input order. If a `GradeScale` type ever wraps the bands,
+  distinctness and sortedness are what it should validate.
+
+- `ce6e7bd`, `9486400`, `1b5da96` — the pre-commit hook, its documentation, and the
+  root `ruff.toml` guard. See Tooling.
+
+- `a77df3b` — `scoring/__init__.py`, Task 6. Nine names re-exported with `__all__`
+  asserted for **exact** equality, so a leaked name fails when it is introduced
+  rather than after something imports it. Callers write `from scoring import
+  mark_numeric`, never `from scoring.marking import ...`, which is what keeps
+  internal modules movable. The test looks names up with `hasattr` against a list of
+  strings; importing them at the top of the test module would turn a red into a
+  collection error that takes the whole suite down.
+
+**`ruff check` and `ruff format` are separate commands** — a clean `check` says
+nothing about formatting. That gap cost review rounds on Tasks 3 and 5, which is
+why the pre-commit hook exists.
+
+**Next action is Task 7**: legacy parity — run `legacy/`'s scoring and the new
+package over the same inputs and prove they agree except where a finding says they
+must differ. It is the largest task left and the one that makes the rebuild
+defensible if a result is ever challenged. **Note the constraint tension up front:**
+parity wants real inputs, and no real exam content may enter this repository.
+Settle where that data lives before writing any of it down.
 
 Each task in the plan ends at a **review gate**. He posts the code; you review it
 before he starts the next task.
@@ -232,9 +299,14 @@ content in the commit you never read.
   file validates content that isn't what's committed. Known and accepted; the
   `git stash --keep-index` fix can lose work when a hook exits badly.
 
-## Open questions, both non-blocking
+## Open questions, none blocking
 
 1. Which Code of Points cycle the SAGF national exam actually follows. The old
    answer key uses `D1 + D2` / `D3 + D4` / `AV` / `EX`, which is 2017–2020
    structure. Affects what table data gets loaded, not the design.
 2. Candidates per sitting. Assumed tens.
+3. Where `mark_choice` comes from. There is no multiple-choice or written theory
+   component anywhere in the FIG rules, yet the plan specifies the function and it
+   is now built and tested. It may be an SAGF national addition, or a legacy
+   artefact. Worth settling before Task 7, since parity has to compare *something*
+   against it.
