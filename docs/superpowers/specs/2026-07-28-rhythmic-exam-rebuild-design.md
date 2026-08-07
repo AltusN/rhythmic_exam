@@ -87,6 +87,35 @@ other results route. It exposes all candidates' names, SAGF IDs and scores.
 `edit_exam_question` stores raw HTML from the admin form and templates render it with
 `|safe`. Acknowledged in a code comment at `main/routes.py:146`.
 
+### F9 — Cumulative question levels are selected by equality
+
+`main/routes.py:450` and `:497` filter theory questions with `exam_level == user.level`,
+and `ExamQuestions.exam_level` is a single scalar column, so a question belongs to exactly
+one level. The rule is cumulative — a level 2 candidate sits level 1's questions *plus*
+level 2's. As written they sit only level 2's, and `calculate_theory_score` divides by the
+filtered count, so the reported percentage looks entirely normal. A judge is certified
+without ever being asked the level 1 material. Selection is a lower-bound test, not an
+equality.
+
+The question bank was removed from this repository on 2026-07-28, so whether the data
+worked around this — by importing level 1's questions a second time under `exam_level =
+"2"` — cannot be checked here. If it did, the level rule lived in a spreadsheet and nothing
+in the system enforced it. Found 2026-08-05, after the original audit.
+
+### F10 — A component the candidate never sat is scored as zero
+
+`main/routes.py:457`: `if not result.practical_answer: result.practical_answer =
+'{"answer_1":"0"}'`. Some levels sit no practical component at all. Rather than recording
+the component as absent, the view fabricates an answer, which then marks against every
+practical question and reports roughly 0%. The result is indistinguishable from a candidate
+who sat the practical and failed it — on a straight average of two components, a
+theory-only candidate scoring 90% is reported at 45%.
+
+Distinct from F5, which concerns the arithmetic of the practical percentage. This is a
+component that should not exist for that candidate having a score at all. The same
+conflation F3 makes between a blank answer and an unreadable one: absence is not a value.
+Found 2026-08-05, after the original audit.
+
 ## Scope
 
 ### In
