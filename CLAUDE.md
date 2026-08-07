@@ -66,11 +66,56 @@ as of 2026-07-28.
 Nothing is scheduled, so there is **no production pressure** — build in the right
 order rather than racing a date.
 
+**Two components.** *Theory* is multiple choice, testing the rules knowledge a judge
+is meant to have — `mark_choice` scores it, and `score_component` over those marks
+reproduces the legacy theory percentage exactly. *Practical* is numeric, the
+candidate's score against an expert's — `mark_numeric` scores it. Legacy got theory
+right and practical wrong: `calculate_theory_score` divided by the question count,
+`calculate_practical_score` summed marks and called the total a percentage (F5).
+
+**Theory questions are banded by level, cumulatively.** A level 2 candidate sits
+every level 1 question plus the level 2 additions; level 3 sits all three bands, and
+so on. So a question carries the *lowest* level obliged to answer it, and selection
+is `question.minimum_level <= candidate.level` — a lower-bound comparison, the same
+shape as `GradeBand.minimum` and `floor_band_index`. Modelling it as
+`question.level == candidate.level` looks reasonable and silently hands a level 3
+candidate only the level 3 additions, sitting them a fraction of their exam. That is
+exactly what the old app did — see **F9**.
+
+**Decided 2026-08-05: a question exists once; a paper lists which questions it
+contains.** Each level's paper is explicit data — a many-to-many, not a scalar
+`level` column and not a `minimum_level <= candidate.level` query. Overlap between
+levels is the same question row referenced by two papers, never a copy of it.
+
+Two things this buys, and both were argued rather than assumed. Duplicating a
+question per level means an answer-key correction has to find every copy, and a
+missed copy leaves two cohorts marked against different keys with no error anywhere
+— F1's family. And a pure cumulative rule cannot express a level that *drops* or
+replaces an inherited question; the first time the syllabus does that you bolt on an
+exceptions table and arrive at the join table by a worse road.
+
+"Cumulative" therefore describes how a paper is **built** — seed level 2 from level
+1, then add — not how it is queried. Note the usual reason to duplicate does not
+apply here: keeping historical papers stable is F1's snapshot's job, so duplication
+buys nothing there. The exact schema is for the questions-app plan.
+
+**Not every level sits every component.** Some levels are theory-only — there is no
+practical paper for them at all. So the components a candidate sits are a property
+of their level, not a constant, and a result record must distinguish *not
+applicable* from *scored zero*. Carrying an absent practical as `0` turns a 90%
+theory-only candidate from Excellent into Fail on a straight average. This is the
+same distinction `to_decimal` already draws between a blank answer and an
+unreadable one (F3): absence is not a value. `score_component([])` raising rather
+than returning `0` is the existing half of that guard; the other half belongs in
+whatever combines components, which is not built yet.
+
 ## Read these before doing anything
 
 - `docs/superpowers/specs/2026-07-28-rhythmic-exam-rebuild-design.md` — the design.
-  Includes eight numbered findings (F1–F8) from the old app; each one is a bug the
-  rebuild must fix, and several have tests written specifically to pin them.
+  Includes ten numbered findings (F1–F10) from the old app; each one is a bug the
+  rebuild must fix, and several have tests written specifically to pin them. F1–F8
+  came from the original audit; **F9 and F10 were found on 2026-08-05** while
+  checking how legacy selected questions by level. Assume there are more.
 - `docs/superpowers/plans/2026-07-28-scoring-package.md` — the current plan.
 
 ## Layout
@@ -149,7 +194,7 @@ says nothing whatever about commit messages; don't mistake one for the other.
 
 ## Current state
 
-Tasks 1–6 of the scoring plan are done, plus tooling. As of 2026-08-05, **72 tests
+**The scoring plan is finished — all seven tasks.** As of 2026-08-05, **81 tests
 pass** and both `ruff check .` and `ruff format --check .` are clean. Run all three
 from `rhythmic/`.
 
@@ -160,6 +205,7 @@ from `rhythmic/`.
 | `test_tables.py` | 14 |
 | `test_marking.py` | 12 |
 | `test_public_api.py` | 10 |
+| `test_legacy_parity.py` | 9 |
 | `test_smoke.py` | 1 |
 
 **The plan's own test-count estimates are stale** — it predicts 54 by Task 6. Tasks
@@ -237,18 +283,40 @@ written before the tests were.
   strings; importing them at the top of the test module would turn a red into a
   collection error that takes the whole suite down.
 
+- `c54d8c5` — `scoring/legacy.py` and `tests/test_legacy_parity.py`, Task 7.
+  `sagf_legacy_table()` states the old SAGF scheme — 5 marks for an exact match,
+  0.25 fewer per 0.05 of difference, zero at 1.00 — as a single-row `MarkingTable`
+  of 21 columns. Bounds are generated with `Decimal(i) * Decimal("0.05")`, never
+  `Decimal(i * 0.05)`, which multiplies in float first and puts the `0.15` bound at
+  `0.15000000000000002` — dropping a candidate sitting exactly on that boundary
+  into the band below.
+
+  **The parity sweep is the deliverable, and it lives in the commit body.** Across
+  every difference from 0.00 to 1.50, old and new agree on all 70 cases where the
+  legacy code returned anything at all, bar one. Three divergences, all deliberate:
+  F3 (`"0.3"` against expert `0.30` scored 0, now 100), F4 (**80 of the 99**
+  differences that reached `diff_arr.index()` raised `ValueError`, now they floor
+  into a band), and difference `0.45`, where legacy's float marks returned
+  `55.00000000000001` — not a numbered finding, pinned by a test so a later sweep
+  reads it as legacy's bug rather than a regression here.
+
+  **Parity needed no real exam content.** An earlier note in this file claimed the
+  data question had to be settled first; it was wrong. The comparison runs on
+  synthetic difference values, not candidate answers. The legacy function was
+  copied verbatim into a scratch script rather than imported, so nothing under
+  `legacy/` was run — do the same for any future parity work.
+
 **`ruff check` and `ruff format` are separate commands** — a clean `check` says
 nothing about formatting. That gap cost review rounds on Tasks 3 and 5, which is
 why the pre-commit hook exists.
 
-**Next action is Task 7**: legacy parity — run `legacy/`'s scoring and the new
-package over the same inputs and prove they agree except where a finding says they
-must differ. It is the largest task left and the one that makes the rebuild
-defensible if a result is ever challenged. **Note the constraint tension up front:**
-parity wants real inputs, and no real exam content may enter this repository.
-Settle where that data lives before writing any of it down.
+**Next action: the scoring plan is done, so the next thing is a new plan.** The
+scoring plan lists what follows, in order — the Django project and questions app,
+then exams/sittings/the freeze, then accounts and the roster, then the React island
+last. None of it is started and none of it is scheduled. Write the plan before
+writing code; that ordering is what the whole rebuild has run on.
 
-Each task in the plan ends at a **review gate**. He posts the code; you review it
+Each task in a plan ends at a **review gate**. He posts the code; you review it
 before he starts the next task.
 
 ### Environment
@@ -305,8 +373,13 @@ content in the commit you never read.
    answer key uses `D1 + D2` / `D3 + D4` / `AV` / `EX`, which is 2017–2020
    structure. Affects what table data gets loaded, not the design.
 2. Candidates per sitting. Assumed tens.
-3. Where `mark_choice` comes from. There is no multiple-choice or written theory
-   component anywhere in the FIG rules, yet the plan specifies the function and it
-   is now built and tested. It may be an SAGF national addition, or a legacy
-   artefact. Worth settling before Task 7, since parity has to compare *something*
-   against it.
+3. **Resolved 2026-08-05.** `mark_choice` is an SAGF national addition, not a FIG
+   one — the theory paper testing a judge's rules knowledge. See What this is for
+   the level structure it implies.
+4. How component percentages combine into one pass/fail. **Legacy is no help: it
+   never combined them.** `main/routes.py:453-460` carries `theory` and `practical`
+   side by side into the results template and the CSV, with no average, weighting or
+   combined grade anywhere — a human read two numbers. So this is a decision to
+   make, not a fact to recover. Whatever it is, it has to hold for levels that sit
+   only one component, without F10's absent-scored-as-zero. Blocks the
+   exams/sittings plan, not the questions plan.
