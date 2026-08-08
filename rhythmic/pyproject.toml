@@ -13,7 +13,13 @@ dependencies = []
 dev = [
     "pytest >= 9.1",
     "pytest-cov >= 7.1",
+    "pytest-django >= 4.13",
     "ruff >= 0.16.0"
+]
+web = [
+    "django >= 6.1",
+    "psycopg[binary] >= 3.3",
+    "python-dotenv >= 1.2"
 ]
 
 [tool.ruff]
