@@ -1,0 +1,11 @@
+# The framework ban lives here, not in ../pyproject.toml, so that it applies to
+# scoring/ and nothing else. Ruff resolves the nearest config per file.
+#
+# `extend` inherits the parent's rule selection; without it this file would
+# replace the selection rather than add to it.
+extend = "../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"django".msg = "scoring/ is framework-free; if a module needs Django, the boundary is wrong"
+"sqlalchemy".msg = "scoring/ touches no database; marking tables arrive as arguments"
+"flask".msg = "Flask lives in legacy/ only; new code imports no web framework"

@@ -40,12 +40,5 @@ ignore = [
   "E501",  # line-too-long (handled by formatter)
 ]
 
-# Sub-tables must stay last: a TOML table header claims every key below it
-# until the next header, so any bare key here would leave [tool.ruff.lint].
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"django".msg = "scoring/ is framework-free; if a module needs Django, the boundary is wrong"
-"sqlalchemy".msg = "scoring/ touches no database; marking tables arrive as arguments"
-"flask".msg = "Flask lives in legacy/ only; new code imports no web framework"
-
 [tool.setuptools]
 packages = ["scoring"]
