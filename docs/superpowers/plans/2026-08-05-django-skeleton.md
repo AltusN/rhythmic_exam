@@ -52,7 +52,12 @@ tests run) get their own review gates, and the questions plan gets written *afte
 Everything is inside `rhythmic/`, and **every path and command below is relative to
 that directory** unless it says otherwise. Start with `cd rhythmic`.
 
-`compose.yaml` is the exception: it goes at the repository root, because Docker is a
+**The `git` steps are the exception and run from the repository root**, because
+their paths are shown root-relative (`rhythmic/config/...`, `.env.example`). Git
+resolves pathspecs against your current directory, so running them from `rhythmic/`
+looks for `rhythmic/rhythmic/config/...` and fails.
+
+`compose.yaml` also lives at the repository root, because Docker is a
 repository-level concern and the eventual application image will need `legacy/`
 excluded and `docs/` ignored.
 
@@ -440,9 +445,9 @@ exists. If it raises `KeyError: 'DJANGO_SECRET_KEY'`, `.env` is missing or
 - [ ] **Step 5: Prove the failure mode is loud**
 
 ```bash
-mv .env .env.hidden
+mv ../.env ../.env.hidden
 ../.venv/bin/python manage.py check
-mv .env.hidden .env
+mv ../.env.hidden ../.env
 ```
 
 Expected: `KeyError: 'DJANGO_SECRET_KEY'` and a non-zero exit — **not** a working
@@ -574,7 +579,7 @@ there is a real database behind this.
 - [ ] **Step 6: Commit**
 
 ```bash
-git status --short   # neither .env may appear
+git status --short   # .env must not appear
 git add compose.yaml
 git commit
 ```
