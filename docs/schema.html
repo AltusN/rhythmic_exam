@@ -324,84 +324,50 @@
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow">questions app &middot; content only</p>
+    <p class="eyebrow">questions &middot; exams &middot; accounts</p>
     <h1>Rhythmic Exam Schema</h1>
-    <p class="lede">Seven tables, five relationships, and a set of rules the database enforces on its own — read straight out of the running Postgres instance.</p>
+    <p class="lede">Sixteen tables, sixteen foreign keys, and a set of rules the database enforces on its own — read straight out of the running Postgres instance.</p>
     <div class="provenance">
       <span><b>postgres 17</b> &middot; database <b>rhythmic</b></span>
-      <span>migrations <b>0001</b>–<b>0006</b></span>
-      <span>generated <b>2026-08-24</b></span>
+      <span>migrations <b>questions 0006</b> &middot; <b>exams 0009</b> &middot; <b>accounts 0001</b></span>
+      <span>generated <b>2026-09-06</b></span>
     </div>
   </header>
 
   <section>
     <div class="section-head">
       <p class="eyebrow">Entity relationships</p>
-      <h2>Two islands, not one graph</h2>
+      <h2>Two islands, and the rows that bridge them</h2>
     </div>
-    <p class="prose">The five foreign keys form two clusters that never touch. That is not an omission — it is the decision of 2026-08-10 made visible: a practical item asks nothing about a routine beyond an aspect and a score, so it shares no structure with a multiple-choice question. Anything that joins them will live in the exams app, not here.</p>
+    <p class="prose">The content tables still form two disconnected graphs: a practical one and a theory one. Nothing in <code>questions</code> knows an exam exists. What changed is that <code>exams</code> now reaches into both — and it reaches only through membership rows, never by putting a level or a kind on a question.</p>
 
     <figure>
       <div class="plate">
 <pre class="mermaid">
 erDiagram
-    APPARATUS  ||--o{ ROUTINE       : "PROTECT"
-    ROUTINE    ||--o{ PRACTICALITEM : "PROTECT"
-    QUESTION   ||--o{ QUESTIONBLOCK : "CASCADE"
-    QUESTION   ||--o{ OPTION        : "CASCADE"
-    OPTION     ||--o{ OPTIONBLOCK   : "CASCADE"
+    APPARATUS     ||--o{ ROUTINE        : "PROTECT"
+    ROUTINE       ||--o{ PRACTICALITEM  : "PROTECT"
+    QUESTION      ||--o{ QUESTIONBLOCK  : "CASCADE"
+    QUESTION      ||--o{ OPTION         : "CASCADE"
+    OPTION        ||--o{ OPTIONBLOCK    : "CASCADE"
 
-    APPARATUS {
-        bigint id PK
-        varchar50 name UK "FIG order"
-        smallint position
-    }
-    ROUTINE {
-        bigint id PK
-        bigint apparatus_id FK
-        varchar200 label
-        varchar100 video "upload_to routines/"
-    }
-    PRACTICALITEM {
-        bigint id PK
-        bigint routine_id FK
-        varchar2 aspect "DA DB AV EX"
-        numeric4_2 expert_score
-    }
-    QUESTION {
-        bigint id PK
-        varchar50 reference UK
-        text notes "internal only"
-    }
-    QUESTIONBLOCK {
-        bigint id PK
-        bigint question_id FK
-        varchar10 kind "TEXT IMAGE VIDEO"
-        smallint position
-        text text
-        varchar100 image
-        varchar100 video
-    }
-    OPTION {
-        bigint id PK
-        bigint question_id FK
-        smallint position
-        boolean is_correct
-    }
-    OPTIONBLOCK {
-        bigint id PK
-        bigint option_id FK
-        varchar10 kind "TEXT IMAGE VIDEO"
-        smallint position
-        text text
-        varchar100 image
-        varchar100 video
-    }
+    EXAM          ||--o{ EXAMCOMPONENT     : "CASCADE"
+    EXAMCOMPONENT ||--o{ MARKINGTABLEROW   : "CASCADE"
+    EXAMCOMPONENT ||--o{ GRADEBANDROW      : "CASCADE"
+    EXAMCOMPONENT ||--o{ COMPONENTQUESTION : "CASCADE"
+    EXAMCOMPONENT ||--o{ COMPONENTPRACTICALITEM : "CASCADE"
+    QUESTION      ||--o{ COMPONENTQUESTION : "PROTECT"
+    PRACTICALITEM ||--o{ COMPONENTPRACTICALITEM : "PROTECT"
+
+    USER          ||--o{ SITTING     : "PROTECT judge"
+    USER          ||--o{ SITTING     : "PROTECT certified_by"
+    EXAM          ||--o{ SITTING     : "PROTECT"
+    SITTING       ||--o{ SITTINGITEM : "CASCADE"
 </pre>
       </div>
       <figcaption>
-        <span class="mono">5 foreign keys</span>
-        <span>Labels give the <span class="mono">on_delete</span> rule. Types are shown without punctuation, which Mermaid reserves.</span>
+        <span class="mono">16 foreign keys</span>
+        <span>Labels give the <code>on_delete</code> rule, which lives in Django and not in Postgres — every one of these constraints is plain <code>NO ACTION</code> in the database. Columns are listed further down rather than in the diagram; at sixteen tables the attribute blocks stop being readable.</span>
       </figcaption>
     </figure>
 
@@ -414,13 +380,21 @@ erDiagram
         <p class="eyebrow">Island two &middot; theory</p>
         <p><b>Question → Block, Question → Option → Block.</b> Every word a candidate reads is a block row; legacy's five JSON schemas became this shape. <code>CASCADE</code> throughout: an option has no meaning without its question.</p>
       </div>
+      <div class="island">
+        <p class="eyebrow">The bridge &middot; exams</p>
+        <p><b>ExamComponent → ComponentQuestion / ComponentPracticalItem.</b> One mechanism for both halves of the exam. Membership is an explicit row, so a question can belong to level 1 and level 2 without being copied — and the copy is what an answer-key correction would otherwise have to chase.</p>
+      </div>
+      <div class="island">
+        <p class="eyebrow">The leaf &middot; sitting</p>
+        <p><b>SittingItem → Sitting, and nothing else.</b> A frozen item holds one foreign key. Its component identity is three copied strings and its content is JSON, so no later edit anywhere upstream can reach it. That absence is the point of the table.</p>
+      </div>
     </div>
   </section>
 
   <section>
     <div class="section-head">
       <p class="eyebrow">Read this beside the diagram</p>
-      <h2>Four rules no ER diagram draws</h2>
+      <h2>Nine rules no ER diagram draws</h2>
     </div>
     <p class="prose">pgAdmin builds its canvas from <code>pg_constraint</code> and renders lines for foreign keys. Everything below is real, enforced, and invisible to that process — which is why a generated ERD reads as a simpler design than the one actually running.</p>
 
@@ -429,7 +403,7 @@ erDiagram
       <article class="note">
         <span class="tag">index, not constraint</span>
         <h3>At most one correct option per question</h3>
-        <p>A <em>partial</em> unique index — it constrains only the rows where <code>is_correct</code> is true. Postgres has no partial <code>UNIQUE</code> constraint, so this exists in <code>pg_indexes</code> and not in <code>pg_constraint</code> at all. It gives <em>at most</em> one correct option and never <em>at least</em> one: a question with zero correct options still saves, because there are no child rows for the database to object to. The admin formset closes that half.</p>
+        <p>A <em>partial</em> unique index — it constrains only the rows where <code>is_correct</code> is true. Postgres has no partial <code>UNIQUE</code> constraint, so this exists in <code>pg_indexes</code> and not in <code>pg_constraint</code> at all. It gives <em>at most</em> one correct option and never <em>at least</em> one: a question with zero correct options still saves, because there are no child rows for the database to object to. The admin formset closes that half, and so does the freeze, which raises rather than writing an item with no answer key.</p>
         <pre>CREATE UNIQUE INDEX uq_one_correct_option_per_question
     ON questions_option (question_id) WHERE is_correct;</pre>
       </article>
@@ -445,17 +419,61 @@ erDiagram
 
       <article class="note">
         <span class="tag">timing</span>
-        <h3>Two position rules, checked at different moments</h3>
-        <p>Both block tables defer their <code>(parent, position)</code> uniqueness to <code>COMMIT</code>, so code rewriting positions inside one transaction can swap two of them. <code>Option</code>'s equivalent is immediate and fires on every row write. The difference is invisible in any diagram and decides whether a reorder succeeds.</p>
+        <h3>Position rules, checked at different moments</h3>
+        <p>Both block tables defer their <code>(parent, position)</code> uniqueness to <code>COMMIT</code>, so code rewriting positions inside one transaction can swap two of them. Every other position rule in the database is immediate and fires on each row write. The difference is invisible in any diagram and decides whether a reorder succeeds.</p>
         <pre>questions_questionblock  UNIQUE (question_id, position)  DEFERRABLE INITIALLY DEFERRED
 questions_optionblock    UNIQUE (option_id,   position)  DEFERRABLE INITIALLY DEFERRED
-questions_option         UNIQUE (question_id, position)  <span class="rule">immediate</span></pre>
+questions_option         UNIQUE (question_id, position)  <span class="rule">immediate</span>
+exams_examcomponent      UNIQUE (exam_id,     position)  <span class="rule">immediate</span>
+exams_componentquestion  UNIQUE (component_id, position) <span class="rule">immediate</span>
+exams_sittingitem        UNIQUE (sitting_id,  position)  <span class="rule">immediate</span></pre>
+      </article>
+
+      <article class="note">
+        <span class="tag">by omission</span>
+        <h3>The frozen item references nothing</h3>
+        <p><code>exams_sittingitem</code> carries one foreign key, to its sitting. It does <em>not</em> point at <code>exams_examcomponent</code>, and that is deliberate: grouping items for a component score uses <code>component_name</code>, a copied <code>varchar(50)</code>. A foreign key would leave a finished result hostage to a later rename of the live component. The question itself is copied too, into <code>question_snapshot</code>, so the row survives the question being edited or deleted outright.</p>
+        <pre>component_name      varchar(50)   <span class="rule">copied, not referenced</span>
+component_position  smallint      <span class="rule">copied</span>
+marking_scheme      varchar(7)    <span class="rule">copied</span>
+question_snapshot   jsonb         <span class="rule">the whole stem and its options</span>
+marking_key         jsonb         <span class="rule">the answer, kept out of the snapshot</span></pre>
+      </article>
+
+      <article class="note">
+        <span class="tag">check</span>
+        <h3>One constraint spanning two columns</h3>
+        <p>The only rule in the schema that relates two columns of the same row. A <code>NUMERIC</code> component must carry difference steps and a <code>CHOICE</code> component must carry none — the marking table exists for one and is meaningless for the other. Everything else the database enforces looks at a single column, or at a tuple of columns for uniqueness.</p>
+        <pre>CHECK ( (array_length(difference_steps, 1) &gt; 0 AND marking_scheme = 'NUMERIC')
+     OR (array_length(difference_steps, 1) = 0 AND marking_scheme = 'CHOICE') )</pre>
+      </article>
+
+      <article class="note">
+        <span class="tag">by omission</span>
+        <h3>A sitting is the only table with no uniqueness at all</h3>
+        <p>No primary-key-aside constraint of any kind on <code>exams_sitting</code>. That is the fix for a legacy schema which declared <code>UNIQUE (sagf_id)</code> with no year and no attempt number, so one row per person was its ceiling. A judge accumulates sittings across cycles, and retakes the same exam after failing, because nothing forbids either. An absence cannot be seen in a diff, which is why two mutants in the sweep exist only to add the constraints back and confirm the tests object.</p>
+      </article>
+
+      <article class="note">
+        <span class="tag">gotcha</span>
+        <h3>The empty aspect is a real value</h3>
+        <p><code>uq_one_component_per_aspect_per_exam</code> has no <code>WHERE</code> clause, so it constrains every row rather than only the ones with an aspect. A theory exam's component carries <code>aspect = ''</code>, and <code>''</code> is a value like any other — so an exam may hold <strong>one</strong> component with an empty aspect, not several. It is the correct rule for the practical, where the four aspects must be distinct, and a surprise the first time a test tries to build two theory components on one exam.</p>
       </article>
 
       <article class="note">
         <span class="tag">not enforced</span>
-        <h3>Aspect is a plain string to Postgres</h3>
-        <p><code>aspect</code> is <code>varchar(2)</code> with no <code>CHECK</code> and no default. <code>DA</code>, <code>DB</code>, <code>AV</code> and <code>EX</code> are Django <code>TextChoices</code>, enforced by form validation only — a shell, a management command or a fixture load can write <code>ZZ</code>. The uniqueness of <code>(routine_id, aspect)</code> <em>is</em> a real index; the vocabulary is not.</p>
+        <h3>Which vocabularies the database actually knows</h3>
+        <p>Three columns hold a fixed set of strings; two of them are checked and one is not. <code>kind</code> and <code>marking_scheme</code> carry a <code>CHECK</code> naming their values, so a shell or a fixture load cannot write nonsense. <code>aspect</code> carries none in either table that has it — <code>DA</code>, <code>DB</code>, <code>AV</code>, <code>EX</code> are Django <code>TextChoices</code>, enforced by form validation only. The uniqueness of <code>(routine_id, aspect)</code> <em>is</em> a real index; the vocabulary is not.</p>
+        <pre>exams_exam.kind                   <span class="rule">CHECK  PRACTICAL | THEORY</span>
+exams_examcomponent.marking_scheme <span class="rule">CHECK  CHOICE | NUMERIC</span>
+exams_examcomponent.aspect        varchar(2)  <span class="rule">no check</span>
+questions_practicalitem.aspect    varchar(2)  <span class="rule">no check</span></pre>
+      </article>
+
+      <article class="note">
+        <span class="tag">timing</span>
+        <h3>Every foreign key is deferred</h3>
+        <p>Django creates its foreign keys <code>DEFERRABLE INITIALLY DEFERRED</code> on Postgres — all sixteen of them, without anyone choosing it. They are therefore checked at <code>COMMIT</code>, and <code>pytest-django</code> wraps each test in a transaction it rolls back, so commit never arrives. A test asserting that the database refused a dangling reference would pass whether or not it did. The <code>PROTECT</code> tests are unaffected: Django raises <code>ProtectedError</code> in Python before Postgres is consulted.</p>
       </article>
 
     </div>
@@ -464,11 +482,28 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
   <section>
     <div class="section-head">
       <p class="eyebrow">Columns as built</p>
-      <h2>The seven tables</h2>
+      <h2>The sixteen tables</h2>
     </div>
-    <p class="prose">Names as Postgres has them. <span class="mono" style="color:var(--accent)">PK</span> primary key, <span class="mono" style="color:var(--accent)">UK</span> unique, <span class="mono" style="color:var(--accent)">FK</span> foreign key. Historical tables from <code>simple_history</code> are omitted — all five carry exactly one foreign key, to <code>auth_user</code>, and none back to the model they shadow.</p>
+    <p class="prose">Names as Postgres has them. <span class="mono" style="color:var(--accent)">PK</span> primary key, <span class="mono" style="color:var(--accent)">UK</span> unique or part of a unique tuple, <span class="mono" style="color:var(--accent)">FK</span> foreign key, <span class="mono" style="color:var(--accent)">N</span> nullable. Historical tables from <code>simple_history</code> are omitted — all six carry exactly one foreign key, to <code>accounts_user</code>, and none back to the model they shadow.</p>
 
     <div class="tables">
+
+      <div class="tbl">
+        <header><span class="name">accounts_user</span><span class="model">User &middot; AbstractUser, unextended</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">username<span class="key">UK</span></span><span class="t">varchar(150)</span></div>
+          <div class="col"><span class="n">password</span><span class="t">varchar(128)</span></div>
+          <div class="col"><span class="n">email</span><span class="t">varchar(254)</span></div>
+          <div class="col"><span class="n">first_name</span><span class="t">varchar(150)</span></div>
+          <div class="col"><span class="n">last_name</span><span class="t">varchar(150)</span></div>
+          <div class="col"><span class="n">is_superuser</span><span class="t">boolean</span></div>
+          <div class="col"><span class="n">is_staff</span><span class="t">boolean</span></div>
+          <div class="col"><span class="n">is_active</span><span class="t">boolean</span></div>
+          <div class="col"><span class="n">date_joined</span><span class="t">timestamptz</span></div>
+          <div class="col"><span class="n">last_login<span class="key">N</span></span><span class="t">timestamptz</span></div>
+        </div>
+      </div>
 
       <div class="tbl">
         <header><span class="name">questions_apparatus</span><span class="model">Apparatus &middot; ordering: position</span></header>
@@ -493,9 +528,9 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
         <header><span class="name">questions_practicalitem</span><span class="model">PracticalItem &middot; history tracked</span></header>
         <div class="cols">
           <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
-          <div class="col"><span class="n">aspect</span><span class="t">varchar(2)</span></div>
+          <div class="col"><span class="n">aspect<span class="key">UK</span></span><span class="t">varchar(2)</span></div>
           <div class="col"><span class="n">expert_score</span><span class="t">numeric(4,2)</span></div>
-          <div class="col"><span class="n">routine_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">routine_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
         </div>
       </div>
 
@@ -509,12 +544,12 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
       </div>
 
       <div class="tbl">
-        <header><span class="name">questions_option</span><span class="model">Option &middot; history tracked</span></header>
+        <header><span class="name">questions_option</span><span class="model">Option &middot; ordering: position &middot; history tracked</span></header>
         <div class="cols">
           <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
-          <div class="col"><span class="n">position</span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
           <div class="col"><span class="n">is_correct</span><span class="t">boolean</span></div>
-          <div class="col"><span class="n">question_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">question_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
         </div>
       </div>
 
@@ -523,11 +558,11 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
         <div class="cols">
           <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
           <div class="col"><span class="n">kind</span><span class="t">varchar(10)</span></div>
-          <div class="col"><span class="n">position</span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
           <div class="col"><span class="n">text</span><span class="t">text</span></div>
           <div class="col"><span class="n">image</span><span class="t">varchar(100)</span></div>
           <div class="col"><span class="n">video</span><span class="t">varchar(100)</span></div>
-          <div class="col"><span class="n">question_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">question_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
         </div>
       </div>
 
@@ -536,11 +571,105 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
         <div class="cols">
           <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
           <div class="col"><span class="n">kind</span><span class="t">varchar(10)</span></div>
-          <div class="col"><span class="n">position</span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
           <div class="col"><span class="n">text</span><span class="t">text</span></div>
           <div class="col"><span class="n">image</span><span class="t">varchar(100)</span></div>
           <div class="col"><span class="n">video</span><span class="t">varchar(100)</span></div>
-          <div class="col"><span class="n">option_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">option_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_exam</span><span class="model">Exam &middot; ordering: -year, level, kind</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">level<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">year<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">kind<span class="key">UK</span></span><span class="t">varchar(9)</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_examcomponent</span><span class="model">ExamComponent &middot; ordering: position</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">name</span><span class="t">varchar(50)</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">marking_scheme</span><span class="t">varchar(7)</span></div>
+          <div class="col"><span class="n">aspect<span class="key">UK</span></span><span class="t">varchar(2)</span></div>
+          <div class="col"><span class="n">difference_steps</span><span class="t">numeric(4,2)[]</span></div>
+          <div class="col"><span class="n">exam_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_markingtablerow</span><span class="model">MarkingTableRow &middot; ordering: expert_minimum</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">expert_minimum<span class="key">UK</span></span><span class="t">numeric(4,2)</span></div>
+          <div class="col"><span class="n">percentages</span><span class="t">numeric(5,2)[]</span></div>
+          <div class="col"><span class="n">component_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_gradebandrow</span><span class="model">GradeBandRow &middot; ordering: minimum</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">name<span class="key">UK</span></span><span class="t">varchar(50)</span></div>
+          <div class="col"><span class="n">minimum</span><span class="t">numeric(5,2)</span></div>
+          <div class="col"><span class="n">component_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_componentquestion</span><span class="model">ComponentQuestion &middot; ordering: position</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">component_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">question_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_componentpracticalitem</span><span class="model">ComponentPracticalItem &middot; ordering: position</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">component_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">practical_item_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_sitting</span><span class="model">Sitting &middot; ordering: exam, started_at, pk &middot; history tracked</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">status</span><span class="t">varchar(11)</span></div>
+          <div class="col"><span class="n">started_at<span class="key">N</span></span><span class="t">timestamptz</span></div>
+          <div class="col"><span class="n">submitted_at<span class="key">N</span></span><span class="t">timestamptz</span></div>
+          <div class="col"><span class="n">certified_at<span class="key">N</span></span><span class="t">timestamptz</span></div>
+          <div class="col"><span class="n">outcome</span><span class="t">varchar(255)</span></div>
+          <div class="col"><span class="n">judge_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">exam_id<span class="key">FK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">certified_by_id<span class="key">FK N</span></span><span class="t">bigint</span></div>
+        </div>
+      </div>
+
+      <div class="tbl">
+        <header><span class="name">exams_sittingitem</span><span class="model">SittingItem &middot; ordering: position, pk</span></header>
+        <div class="cols">
+          <div class="col"><span class="n">id<span class="key">PK</span></span><span class="t">bigint</span></div>
+          <div class="col"><span class="n">component_name</span><span class="t">varchar(50)</span></div>
+          <div class="col"><span class="n">component_position</span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">marking_scheme</span><span class="t">varchar(7)</span></div>
+          <div class="col"><span class="n">position<span class="key">UK</span></span><span class="t">smallint</span></div>
+          <div class="col"><span class="n">question_snapshot</span><span class="t">jsonb</span></div>
+          <div class="col"><span class="n">marking_key</span><span class="t">jsonb</span></div>
+          <div class="col"><span class="n">response<span class="key">N</span></span><span class="t">jsonb</span></div>
+          <div class="col"><span class="n">percentage<span class="key">N</span></span><span class="t">numeric(5,2)</span></div>
+          <div class="col"><span class="n">sitting_id<span class="key">FK UK</span></span><span class="t">bigint</span></div>
         </div>
       </div>
 
@@ -548,8 +677,8 @@ questions_option         UNIQUE (question_id, position)  <span class="rule">imme
   </section>
 
   <footer class="colophon">
-    <p>Built by querying <code>pg_attribute</code>, <code>pg_constraint</code> and <code>pg_indexes</code> on the running container, not by reading <code>models.py</code> — so it reflects what the migrations actually created. The test database is built the same way, which is why <code>makemigrations --check</code> earns its place in the suite.</p>
-    <p>Every column in all seven tables is <code>NOT NULL</code>. Nothing here is exam content: no question text, no options, no expert scores.</p>
+    <p>Built by querying <code>information_schema.columns</code>, <code>pg_constraint</code> and <code>pg_indexes</code> on the running container, not by reading <code>models.py</code> — so it reflects what the migrations actually created. The test database is built the same way, which is why <code>makemigrations --check</code> earns its place in the suite.</p>
+    <p>Seven columns in the whole schema are nullable. Six of them record something that has not happened yet — three timestamps and a certifier on <code>exams_sitting</code>, a response and a mark on <code>exams_sittingitem</code> — and the seventh is Django's own <code>last_login</code>. Absence is a null here; it is never a zero and never an empty string, which is the one thing the schema this replaces got wrong. Nothing on this page is exam content: no question text, no options, no expert scores.</p>
   </footer>
 
 </div>
