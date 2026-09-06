@@ -52,6 +52,8 @@
       --accent-soft: #2b2416;
       --flag:        #e58398;
       --flag-soft:   #2e1c21;
+      --plate:       #151b24;
+      --plate-line:  #333b4a;
     }
   }
 
@@ -68,6 +70,8 @@
     --accent-soft: #2b2416;
     --flag:        #e58398;
     --flag-soft:   #2e1c21;
+    --plate:       #151b24;
+    --plate-line:  #333b4a;
   }
 
   * { box-sizing: border-box; }
@@ -163,7 +167,10 @@
     white-space: nowrap;
   }
 
-  /* --- diagram plate: kept light in both themes so the rendered SVG stays legible --- */
+  /* --- diagram plate. It was kept light in both themes on the theory that the
+     rendered mermaid SVG needed a light ground -- but nothing in this file renders
+     mermaid (there is no <script> anywhere), so the block is preformatted text
+     inheriting --ink-2 from body. Light grey on #fbfaf7 was the result. --- */
   .plate {
     background: var(--plate);
     border: 1px solid var(--plate-line);
