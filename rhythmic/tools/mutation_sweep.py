@@ -19,10 +19,15 @@ import sys
 RHYTHMIC = pathlib.Path(__file__).resolve().parent.parent
 PYTHON = RHYTHMIC.parent / ".venv" / "bin" / "python"
 
-# Cheapest first. pytest honours argument order, and every mutant runs under `-x`,
-# so a mutant killed by a cheap file never pays for the expensive ones. Measured
-# 2026-08-30: admin 3.9s and preview 2.4s, every other file 0.3-0.8s, of which
-# 0.56s is fixed interpreter and Django startup shared by all of them.
+# Cheapest first, which is the right order for a mutant with no better guess --
+# pytest honours argument order and every run uses `-x`, so a mutant killed by a
+# cheap file never pays for the expensive ones. Measured 2026-08-30: admin 3.9s
+# and preview 2.4s, every other file 0.3-0.8s, of which 0.56s is fixed interpreter
+# and Django startup shared by all of them.
+#
+# When `batches_for` can name the likely killer it runs that first instead, and
+# this order applies to what remains. Cheapest-first optimises the wrong thing on
+# its own: a mutant is only as expensive as the distance to the test that objects.
 QUESTIONS_TESTS = [
     "tests/questions/test_theory.py",
     "tests/questions/test_practical.py",
@@ -55,9 +60,43 @@ TEST_PATHS = EXAMS_TESTS + QUESTIONS_TESTS + ["tests/config/test_smoke.py"]
 SCOPES = {"exams": EXAMS_TESTS, "questions": QUESTIONS_TESTS}
 
 
-def scope_for(relative_path: str) -> list[str]:
+def batches_for(relative_path: str) -> list[list[str]]:
+    """Ordered batches to run, stopping at the first that fails.
+
+    Batch one is the test file whose name matches the mutated module, when such a
+    file exists. Under `-x` what matters is reaching the killing test early, not
+    running the cheap files first -- measured 2026-09-06, the six `admin-*`
+    mutants each ran 46 tests that cannot fail before reaching the twelve that
+    can, at roughly 4-6s apiece.
+
+    The guess is only a guess, and correctness lives in the fallback rather than
+    in it. A wrong guess costs one extra interpreter start (0.54s); a module with
+    no matching test file -- `questions/models.py`, every migration -- simply
+    yields none and the scope runs as before.
+
+    The final batch is `TEST_PATHS` minus everything already run. Narrowing is
+    still only safe in one direction: a KILLED verdict holds whatever the scope,
+    because some test objected, while a SURVIVED verdict does not, so a mutant
+    that survives its scope must still face everything else. But the tests that
+    already passed cannot kill it, so re-running them proves nothing and costs
+    the survivor a second full pass.
+    """
     app = relative_path.split("/", 1)[0]
-    return SCOPES.get(app, TEST_PATHS)
+    scope = SCOPES.get(app)
+    if scope is None:
+        return [TEST_PATHS]
+
+    # Any extension, not just .py: a template mutant in questions/templates/.../
+    # preview.html is killed by tests/questions/test_preview.py.
+    stem = relative_path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    hint = f"tests/{app}/test_{stem}.py"
+    batches = (
+        [[hint], [path for path in scope if path != hint]]
+        if hint in scope
+        else [list(scope)]
+    )
+    already_run = {path for batch in batches for path in batch}
+    return [*batches, [path for path in TEST_PATHS if path not in already_run]]
 
 
 # (name, file, text to find, text to put in its place)
@@ -455,11 +494,13 @@ def main() -> int:
         try:
             source.write_text(original.replace(before, after, 1))
             fresh = "migrations" in relative_path
-            scope = scope_for(relative_path)
-            returncode = run_tests(scope, fresh_database=fresh)
-            if returncode == 0 and scope is not TEST_PATHS:
-                # Survived its scope. Confirm against everything before believing it.
-                returncode = run_tests(TEST_PATHS, fresh_database=fresh)
+            returncode = 0
+            for batch in batches_for(relative_path):
+                if not batch:
+                    continue
+                returncode = run_tests(batch, fresh_database=fresh)
+                if returncode != 0:
+                    break
         finally:
             source.write_text(original)
         if returncode == 0:
