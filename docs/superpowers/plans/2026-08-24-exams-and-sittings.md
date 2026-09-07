@@ -867,8 +867,11 @@ copied rather than referenced so a later edit cannot regroup a finished result.
 
 **Files:**
 - Create: `exams/marking.py`
-- Modify: `exams/models/sitting.py`
 - Test: `tests/exams/test_marking.py`
+
+`exams/models/sitting.py` was listed here and is not needed (removed 2026-09-07):
+`percentage` was defined on `SittingItem` in Task 7 and `Status.SUBMITTED` already
+exists, so nothing in this task changes a model.
 
 **Interfaces:**
 - Consumes: `SittingItem`, `exams.tables`, `scoring.mark_choice`, `scoring.mark_numeric`.
@@ -877,13 +880,42 @@ copied rather than referenced so a later edit cannot regroup a finished result.
 **Marks are stored, not recomputed.** `submit_sitting` writes `percentage` onto every
 item once. Nothing later recalculates it.
 
-- [ ] **Step 1: Write `record_response`**
+**Two things this task must decide, neither of which the plan settled** (noted
+2026-09-07, before any code was written).
+
+**The shape of `response`.** It is a `JSONField` and nothing says what goes in it.
+Either a bare JSON string, so `item.response == "2"` and `mark_choice` takes it
+directly, or a one-key dict, `{"answer": "2"}`, matching `marking_key`'s shape and
+leaving somewhere for the timer data the domain notes promise. Recommendation is the
+dict, on the weak grounds that two JSON columns side by side in one row with different
+shapes get misread. `None` versus `{}` stays meaningful either way.
+
+**How a numeric item finds its marking table.** `SittingItem` deliberately holds no
+foreign key to `ExamComponent` — that absence is Task 7's whole point — so
+`build_marking_table(component)` has nothing to be called with. Looking the component
+up by the frozen `component_name` is **F2's shape**, and worse here than it looks:
+there is no unique constraint on `(exam, name)`, only on `(exam, position)` and
+`(exam, aspect)`, so the name is not a key. Settle this before writing
+`test_a_numeric_response_is_marked_through_the_marking_table`. The candidates are to
+freeze the table into the item at start, to look it up by `component_position`, or to
+pass the component in from the caller.
+
+- [ ] **Step 1: Write the failing tests** — the table below, one at a time
+
+Written before the code, not after. The step order here said otherwise until 2026-09-07
+and Task 7 ignored it in practice; see `CLAUDE.md`, "He writes the test before the code
+where the plan says write the failing tests". Start with
+`test_a_correct_choice_scores_full_marks`: it needs no marking table, so it drives
+`record_response` and the `CHOICE` branch into existence without waiting on the
+decision above.
+
+- [ ] **Step 2: Write `record_response`**
 
 Writes `response` onto one item and nothing else. Refuses when the sitting is not
 `IN_PROGRESS` — a submitted sitting is closed, and the timer that moves a candidate on is a
 runner concern, not a model one.
 
-- [ ] **Step 2: Write `submit_sitting`**
+- [ ] **Step 3: Write `submit_sitting`**
 
 For each item: `mark_choice(response, key)` when `marking_scheme` is `CHOICE`,
 `mark_numeric(response, expert_score, table)` when `NUMERIC`. Store the result in
@@ -891,12 +923,18 @@ For each item: `mark_choice(response, key)` when `marking_scheme` is `CHOICE`,
 
 `to_decimal` turns the stored string key into a `Decimal`. **Never `float(...)`** — F3.
 
+**F4 does not close itself.** `to_decimal` *raises* `UnparseableAnswer` on `"abc"`; it
+returns `None` only for blank. `mark_numeric` calls it with no `try`, so the exception
+propagates out — which is precisely the legacy crash F4 names. `submit_sitting` is what
+has to catch it and store `0`. Corrected 2026-09-07: this step previously read as though
+`mark_numeric` handled it.
+
 An unanswered item marks as **0**, and that is correct: the candidate sat the component and
 did not answer. It is categorically different from F10's absent component, which has no
 sitting and therefore no items at all. Write that distinction into a comment, because the
 next reader will conflate them — legacy did.
 
-- [ ] **Step 3: Write the failing tests**
+The tests, for reference from Step 1:
 
 | test | asserts |
 |---|---|
@@ -907,7 +945,7 @@ next reader will conflate them — legacy did.
 | `test_marks_are_not_recomputed_after_submission` | **the F1 test with teeth** — submit, then change the marking table rows *and* the question, reload, assert `percentage` is unchanged |
 | `test_submitting_twice_raises` | guard |
 
-- [ ] **Step 4: Run red, implement, green**
+- [ ] **Step 4: Green, with every test having been seen red first**
 
 - [ ] **Step 5: Sweep, lint, commit**
 
