@@ -570,8 +570,27 @@ adapting them into `scoring/`'s frozen dataclasses; `ComponentQuestion` and
 **Part B has started — Task 6 landed, `e33870b`.** `Sitting` is judge · exam with a
 status defaulting to `PENDING`, nullable `started_at`/`submitted_at`/`certified_at`,
 a `certified_by` pointing at the official rather than the candidate, and
-`HistoricalRecords`. **Next action is Task 7, `SittingItem` and the freeze.** Then
-accounts and the roster, then the React island last.
+`HistoricalRecords`.
+
+**Task 7 landed, `7f1f824`.** `SittingItem` holds one foreign key, to its sitting;
+the component's name, position and marking scheme are **copied strings**, and the
+question is copied into `question_snapshot` with the answer in a separate
+`marking_key`. `exams/freeze.py`'s `start_sitting` walks the components in order,
+writes one item per member with a running position, and re-reads the sitting through
+`select_for_update()` inside the transaction rather than trusting the instance it was
+handed. The freeze costs **13 queries whether the paper has 1 member or 200** — it
+was 385 before the prefetches, and `test_starting_a_sitting_does_not_issue_a_query_per_member`
+pins it. **Next action is Task 8, responses and submission.** Then accounts and the
+roster, then the React island last.
+
+**F1 is closed structurally but only half-tested, and the plan knows.** Task 7's
+snapshot test pins *what* gets copied; it cannot pin *when*, because `start_sitting`
+copies at freeze time by construction and the edit under test happens afterwards. No
+mutation of the freeze can reproduce F1's real failure — recomputing from live data
+when a result is displayed — because there is no read path yet. That is why the plan
+calls Task 8's `test_marks_are_not_recomputed_after_submission` "the F1 test with
+teeth", and why `freeze-reuses-live-question` is deliberately absent from the
+catalogue until then.
 
 **F9 is closed, and closed by absence.** There is no level field on a membership row and no
 comparison to a candidate's level anywhere — selection is "the component's members", so
@@ -606,11 +625,22 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 6, 2026-09-03: **45 mutants, 44 killed, 1 survived** — the
-survivor is `list_filter` on aspect, which Task 8 declared out of scope and which has
-now survived seven consecutive runs. **How the sweep scopes its tests, which mutants
+Latest run, after Task 7, 2026-09-06: **51 mutants, 50 killed, 1 survived** — the
+survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
+of scope and which has now survived nine consecutive runs. **It costs 11.5s of the
+99s run and is the largest single item in it**; either fix `list_filter` or drop the
+mutant, because a permanently red SURVIVED line trains you to skim the one line in
+the report that is meant to stop you. **How the sweep scopes its tests, which mutants
 need `--create-db`, where a claim actually lives and what `UNAPPLIED` means are in the
 `mutation-sweep` skill.**
+
+**The sweep runs the likely killer first** (`142bf81`). Cheapest-file-first was
+optimising the wrong thing: under `-x` a mutant costs the distance to the test that
+objects, not the price of the files ahead of it, and the admin mutants were each
+running 46 tests that cannot fail before reaching the twelve that can. `batches_for`
+guesses a test file from the mutated module's name, falls back to the app scope, and
+finally to everything still unrun — correctness in the fallback, speed in the guess.
+137s to 99s, verdicts unchanged.
 
 **The survivor re-run was not actually running everything, and Task 6 caught it**
 (fixed `e33870b`; the mechanism is in the `mutation-sweep` skill).
