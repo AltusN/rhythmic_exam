@@ -890,15 +890,51 @@ leaving somewhere for the timer data the domain notes promise. Recommendation is
 dict, on the weak grounds that two JSON columns side by side in one row with different
 shapes get misread. `None` versus `{}` stays meaningful either way.
 
-**How a numeric item finds its marking table.** `SittingItem` deliberately holds no
-foreign key to `ExamComponent` — that absence is Task 7's whole point — so
-`build_marking_table(component)` has nothing to be called with. Looking the component
-up by the frozen `component_name` is **F2's shape**, and worse here than it looks:
-there is no unique constraint on `(exam, name)`, only on `(exam, position)` and
-`(exam, aspect)`, so the name is not a key. Settle this before writing
-`test_a_numeric_response_is_marked_through_the_marking_table`. The candidates are to
-freeze the table into the item at start, to look it up by `component_position`, or to
-pass the component in from the caller.
+**How a numeric item finds its marking table — decided 2026-09-08: freeze the table
+into the item.** `SittingItem` deliberately holds no foreign key to `ExamComponent`,
+that absence being Task 7's whole point, so `build_marking_table(component)` has
+nothing to be called with at submission. Looking the component up by the frozen
+`component_name` is **F2's shape**, and worse than it looks: there is no unique
+constraint on `(exam, name)` — only on `(exam, position)` and `(exam, aspect)` — so
+the name is not a key at all.
+
+`marking_key` therefore carries the table alongside the expert score, every number a
+string for the reason the expert score already is one:
+
+```json
+{
+  "expert_score": "8.50",
+  "marking_table": {
+    "difference_steps": ["0.10", "0.20", "0.50"],
+    "rows": [
+      {"expert_minimum": "0.00", "percentages": ["100.00", "90.00", "50.00"]}
+    ]
+  }
+}
+```
+
+**What this buys is that `submit_sitting` becomes a pure function of the row it is
+marking** — no lookup, no key, no second table, and no window between freezing and
+submitting in which an edit could change a candidate's mark. Task 8's own
+`test_marks_are_not_recomputed_after_submission` only closes the window *after*
+submission; this closes the one before it.
+
+**What it costs is duplication, and it was measured rather than guessed.** A
+generously sized table (20 expert bands × 10 difference steps) serialises to 2.5 KB —
+three and a half times a four-option `question_snapshot` at 718 bytes. A practical
+sitting has 20 numeric items sharing 4 distinct tables, so 51 KB is stored where 10 KB
+would do: **41 KB of waste per sitting**, or about 2 MB per fifty sittings. At the
+scale in Open Questions ("candidates per sitting: assumed tens") that is not a
+consideration. Rejected alternatives were a lookup by `component_position`, which
+keeps a live read in the marking path, and freezing the four tables once onto the
+`Sitting`, which saves 41 KB per sitting at the price of a migration and a key.
+
+**Consequence for Task 7's code:** `exams/freeze.py` changes. `_frozen_practical_item`
+needs the component's table, so `start_sitting` builds it once per component — not per
+item — and passes it in. `exams/tables.py` gains the serialise/deserialise pair beside
+`build_marking_table`: one turning a `MarkingTable` into that dict for the freeze, one
+turning it back for marking. Neither touches the database, so the module keeps its
+property of being the only place `scoring` and Django meet.
 
 - [ ] **Step 1: Write the failing tests** — the table below, one at a time
 
