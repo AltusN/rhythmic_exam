@@ -974,23 +974,36 @@ The tests, for reference from Step 1:
 
 | test | asserts |
 |---|---|
-| `test_a_correct_choice_scores_full_marks` | 100 |
+| `test_a_correct_response_scores_full_marks` | 100. On its own it cannot tell marking from `percentage = 100`; the unanswered test below is what gives it meaning |
 | `test_an_unanswered_item_scores_zero_but_is_not_absent` | `percentage == 0` **and** the item exists — the F10/F3 distinction |
 | `test_a_numeric_response_is_marked_through_the_marking_table` | a known cell, asserted as `Decimal`, after reload |
 | `test_an_unreadable_numeric_response_scores_zero` | `"abc"` → 0, not a crash — **F4** |
 | `test_marks_are_not_recomputed_after_submission` | **the F1 test with teeth** — submit, then change the marking table rows *and* the question, reload, assert `percentage` is unchanged |
-| `test_submitting_twice_raises` | guard |
+| `test_submitting_twice_raises_an_exception` | the submit guard |
+| `test_a_submitted_sitting_refuses_further_responses` | **added 2026-09-12.** `record_response` after submission raises. Must reuse the *same* item object — a freshly read one already refuses, and the bug this pins was a cached FK |
+| `test_the_mark_uses_the_table_frozen_at_start_of_sitting` | **added 2026-09-12, and the only test with teeth for the freeze-the-table decision.** Edit the marking table *between* the freeze and the submission, then assert the frozen numbers were used. Needs a positive control on the edit: with its filter matching no rows, `marking-uses-live-table` survives again |
 
 - [ ] **Step 4: Green, with every test having been seen red first**
 
 - [ ] **Step 5: Sweep, lint, commit**
 
-New mutants: `marking-float-cast` (`to_decimal` → `float`), `submit-guard`,
-`marking-scheme-branch` (swap the two branches).
+New mutants, all six killed: `marking-float-cast`, `marking-no-unparseable-catch`,
+`marking-uses-live-table`, `record-guard-reads-cached-fk`, `submit-guard-removed`,
+`marking-scheme-branch-swapped`. **Add `tests/exams/test_marking.py` to `EXAMS_TESTS`
+first** — `TEST_PATHS` is built from it, so without that every marking mutant reports
+SURVIVED.
 
 Subject: `feat(exams): mark a sitting at submission and store the marks (F1, F3, F4)`
 
 **Review gate.** Claude mutates `to_decimal` to `float` and confirms a test objects.
+
+Recorded 2026-09-12: it does, but on a `TypeError` rather than a failed assertion.
+`Decimal` refuses `float` operands outright, so F3 cannot be *quiet* here — a float
+reaching a mark is a crash, not a wrong number. Note the near-miss: mutating
+`Decimal(x)` into `Decimal(str(float(x)))` **survives**, because `8.50` round-trips
+through binary floating point exactly and every operation afterwards stays `Decimal`.
+The mutation has to put a float into the subtraction, not merely pass a value through
+one.
 
 ---
 
