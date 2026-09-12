@@ -92,6 +92,16 @@ a different disguise:
   passed. `refresh_from_db()` or a re-query closes it. This one matters beyond its own
   test — **F1's whole complaint is that legacy recomputed results instead of recording
   them, so every assertion here should be asking what the database holds.**
+
+  **Three mechanisms now, and the third reached production.** Task 6's was a field
+  default applied in `__init__`. Task 7's was a guard trusting the object it was
+  handed, fixed with `select_for_update()`. Task 8's was `record_response` reading
+  `item.sitting.status`: **Django caches a related object on the instance after the
+  first access**, so a second call on the same `item` read a `Sitting` that still said
+  `IN_PROGRESS` and a submitted sitting accepted a further response. Claude had
+  explicitly said this one was safe — "the FK isn't cached on a plain `objects.get()`"
+  — which is true of the first access only. Read `item.sitting_id`, which is a column
+  already on the row and has no cached object behind it to go stale.
 - **the test is never collected at all** — Task 7's F1 test, written as
   `def the_snapshot_survives_editing_the_question(...)` with the `test_` prefix
   dropped. This is the limiting case of the whole list: not a weak assertion but no
@@ -139,6 +149,20 @@ demonstrably not a reliable trigger:
   is review apparatus rather than implementation, and Claude has already run every
   mutation by the time the task ends — having Altus re-type them taught nothing and
   lost the reasoning behind each anchor.
+- **A positive control earns its place when the setup step is the independent
+  variable.** Task 7 produced three controls that no mutant could reach, because
+  there the setup was *scenery* — other machinery already failed loudly if it were
+  missing, a unique index or a rollback or a `get()` that raises. Task 8's
+  `test_the_mark_uses_the_table_frozen_at_start_of_sitting` is the opposite: its whole
+  claim is "this edit did not reach the mark", so an edit that never happened makes
+  the claim vacuous and nothing else notices. Proved by breaking its filter to match
+  no rows, at which point `marking-uses-live-table` survives again. The general test:
+  ask whether the setup step is *enabling* the assertion or *is* the thing being
+  asserted about.
+- **Which query method a test reads through decides whether it needs one at all.**
+  `objects.get()` raises on an empty result, so a test reading that way fails loudly
+  when its setup produced nothing. `exists()`, `count()` and `filter()` are all
+  *satisfied* by emptiness, and those are the ones that need a control beside them.
 - **Before asking for an extra assertion, name the mutant it catches that the
   existing ones don't.** Three times in Task 7 Claude asked for a supplementary
   assertion that no mutant could reach: `items.count() == 1` after the freeze guard
@@ -580,17 +604,41 @@ writes one item per member with a running position, and re-reads the sitting thr
 `select_for_update()` inside the transaction rather than trusting the instance it was
 handed. The freeze costs **13 queries whether the paper has 1 member or 200** — it
 was 385 before the prefetches, and `test_starting_a_sitting_does_not_issue_a_query_per_member`
-pins it. **Next action is Task 8, responses and submission.** Then accounts and the
-roster, then the React island last.
+pins it.
 
-**F1 is closed structurally but only half-tested, and the plan knows.** Task 7's
-snapshot test pins *what* gets copied; it cannot pin *when*, because `start_sitting`
-copies at freeze time by construction and the edit under test happens afterwards. No
-mutation of the freeze can reproduce F1's real failure — recomputing from live data
-when a result is displayed — because there is no read path yet. That is why the plan
-calls Task 8's `test_marks_are_not_recomputed_after_submission` "the F1 test with
-teeth", and why `freeze-reuses-live-question` is deliberately absent from the
-catalogue until then.
+**Task 8 landed, `0dedf18`, and F3 and F4 close with it.** `exams/marking.py` holds
+`record_response` and `submit_sitting`; marks are written once at submission and
+nothing recomputes them. **Next action is Task 9, component results and F5.** Then
+Task 10, then accounts and the roster, then the React island last.
+
+**F3 cannot fail quietly here, and that is a property of `Decimal` rather than of a
+test.** `Decimal` refuses `float` operands, so a float reaching a mark raises
+`TypeError` instead of shifting a band — the review-gate mutant dies on a type error,
+not a wrong number. **F4 does not close itself inside `scoring`:** `to_decimal` raises
+`UnparseableAnswer` and `mark_numeric` does not catch it, so the exception escapes —
+which is the legacy crash. `submit_sitting` catches it and stores `0`, and the `try`
+wraps only the `mark_numeric` call: widen it two lines and a corrupt frozen marking
+table scores every candidate nought, which is F10's shape.
+
+**The marking table is frozen into the item** (decided 2026-09-08, measured before
+deciding — 41 KB of duplication per practical sitting, about 2 MB per fifty). That
+makes `submit_sitting` a pure function of the row it marks, with no lookup and no key,
+and it closes the window *between* freezing and submitting that the plan's own test
+never reached. Only `test_the_mark_uses_the_table_frozen_at_start_of_sitting` has
+teeth for it: a live-lookup implementation survived every other test in the suite,
+because they all edit the table after submission when live and frozen still agree.
+
+**F1 needs three tests and only one of them has teeth, which was not obvious.** The
+claim splits into *what* was copied, *when* it was used, and *whether* it was recorded.
+Task 7's snapshot test covers the first. Task 8's
+`test_marks_are_not_recomputed_after_submission` was billed by the plan as "the F1 test
+with teeth" and is not — like Task 7's, it edits upstream *after* submission, when a
+stored column could not move anyway; both are standing guards against a future read
+path that recomputes. The one that bites is
+`test_the_mark_uses_the_table_frozen_at_start_of_sitting`, which edits *between* the
+freeze and the submission: `marking-uses-live-table` survives the entire suite without
+it. `freeze-reuses-live-question` stays out of the catalogue — there is still no read
+path for it to break.
 
 **F9 is closed, and closed by absence.** There is no level field on a membership row and no
 comparison to a candidate's level anywhere — selection is "the component's members", so
@@ -625,8 +673,8 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 7, 2026-09-06: **51 mutants, 50 killed, 1 survived** — the
-survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
+Latest run, after Task 8, 2026-09-12: **57 mutants, 56 killed, 1 survived** in 112s
+— the survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
 of scope and which has now survived nine consecutive runs. **It costs 11.5s of the
 99s run and is the largest single item in it**; either fix `list_filter` or drop the
 mutant, because a permanently red SURVIVED line trains you to skim the one line in
