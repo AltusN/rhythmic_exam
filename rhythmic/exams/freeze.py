@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from exams.models import Sitting, SittingItem, Status
+from exams.tables import build_marking_table, marking_table_as_json
 
 
 class SittingAlreadyStarted(Exception):
@@ -47,7 +48,7 @@ def _frozen_question(question) -> tuple[dict, dict]:
     return question_snapshot, marking_key
 
 
-def _frozen_practical_item(practical_item) -> tuple[dict, dict]:
+def _frozen_practical_item(practical_item, marking_table) -> tuple[dict, dict]:
     practical_item_snapshot = {
         "routine": {
             "apparatus": {
@@ -61,6 +62,7 @@ def _frozen_practical_item(practical_item) -> tuple[dict, dict]:
     }
     marking_key = {
         "expert_score": str(practical_item.expert_score),
+        "marking_table": marking_table,
     }
     return practical_item_snapshot, marking_key
 
@@ -75,6 +77,12 @@ def start_sitting(sitting: Sitting) -> None:
         items = []
 
         for component in sitting.exam.components.all():
+            practical_members = component.practical_item_members.select_related(
+                "practical_item__routine__apparatus"
+            )
+            table_json = None
+            if practical_members:
+                table_json = marking_table_as_json(build_marking_table(component))
             frozen = [
                 _frozen_question(membership.question)
                 for membership in component.question_members.select_related(
@@ -83,10 +91,8 @@ def start_sitting(sitting: Sitting) -> None:
                     "question__blocks", "question__options", "question__options__blocks"
                 )
             ] + [
-                _frozen_practical_item(membership.practical_item)
-                for membership in component.practical_item_members.select_related(
-                    "practical_item__routine__apparatus"
-                )
+                _frozen_practical_item(membership.practical_item, table_json)
+                for membership in practical_members
             ]
 
             for question_snapshot, marking_key in frozen:

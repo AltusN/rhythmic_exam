@@ -10,6 +10,7 @@ from exams.models import (
     ExamComponent,
     ExamKind,
     MarkingScheme,
+    MarkingTableRow,
     Sitting,
     SittingItem,
 )
@@ -156,6 +157,7 @@ def test_starting_a_sitting_creates_one_item_per_member(django_user_model):
     ]
 
 
+@pytest.mark.django_db
 def test_a_frozen_response_starts_null_not_empty(django_user_model):
     judge = django_user_model.objects.create_user(username="Judge Judy", password="x")
     exam = Exam.objects.create(kind=ExamKind.THEORY, level=1, year=2026)
@@ -223,8 +225,20 @@ def test_the_marking_key_holds_the_expert_score_as_a_string(django_user_model):
         position=1,
         marking_scheme=MarkingScheme.NUMERIC,
         aspect=Aspect.DA,
-        difference_steps=[Decimal("0.10")],
+        difference_steps=[
+            Decimal("0.10"),
+            Decimal("0.20"),
+        ],
     )
+    MarkingTableRow.objects.create(
+        component=component,
+        expert_minimum=Decimal("8.50"),
+        percentages=[
+            Decimal("100.00"),
+            Decimal("50.00"),
+        ],
+    )
+
     ComponentPracticalItem.objects.create(
         component=component,
         practical_item=practical_item,

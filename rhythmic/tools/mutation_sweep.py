@@ -42,6 +42,7 @@ EXAMS_TESTS = [
     "tests/exams/test_definition.py",
     "tests/exams/test_sitting.py",
     "tests/exams/test_freeze.py",
+    "tests/exams/test_marking.py",
 ]
 # Only added to the fallback, never to a per-app scope: this is the one test that
 # catches model-versus-migration drift across every app, and the re-run against
@@ -435,6 +436,77 @@ MUTANTS = [
         "exams/models/sitting.py",
         'ordering = ["position", "pk"]',
         'ordering = ["-position", "pk"]',
+    ),
+    (
+        # Passes a float where a Decimal is required. It cannot silently misprice a
+        # mark -- Decimal refuses float operands outright -- so this dies on a
+        # TypeError inside mark_numeric rather than on an assertion. That refusal is
+        # what makes F3 unable to be quiet in this codebase.
+        "marking-float-cast",
+        "exams/marking.py",
+        'expert = Decimal(item.marking_key["expert_score"])',
+        'expert = float(item.marking_key["expert_score"])',
+    ),
+    (
+        # Removes the catch that closes F4, so an unreadable answer escapes
+        # submit_sitting as UnparseableAnswer -- exactly the legacy crash, on exactly
+        # the legacy input. Killed by test_an_unreadable_numeric_response_scores_zero.
+        "marking-no-unparseable-catch",
+        "exams/marking.py",
+        """                try:
+                    item.percentage = mark_numeric(response, expert, table)
+                except UnparseableAnswer:
+                    item.percentage = Decimal("0")  # F4""",
+        "                item.percentage = mark_numeric(response, expert, table)",
+    ),
+    (
+        # Marks against the live component instead of the table frozen into the item,
+        # which is the whole of the 2026-09-08 decision. Only
+        # test_the_mark_uses_the_table_frozen_at_start_of_sitting can see it: every
+        # other test edits the table AFTER submission, when the live and frozen tables
+        # still agree. That test's positive control is load-bearing -- with its filter
+        # matching no rows, this mutant survives again.
+        "marking-uses-live-table",
+        "exams/marking.py",
+        '                table = marking_table_from_json(item.marking_key["marking_table"])',
+        "                table = build_marking_table(\n"
+        "                    sitting.exam.components.get(position=item.component_position)\n"
+        "                )",
+    ),
+    (
+        # Reads sitting.status through item.sitting -- a related object Django caches
+        # on the instance after first access -- instead of the row just locked. This
+        # was shipped and found by probe on 2026-09-12: a submitted sitting accepted a
+        # further response, because the cached Sitting still said IN_PROGRESS. The
+        # third appearance of "the object in memory is not the row".
+        "record-guard-reads-cached-fk",
+        "exams/marking.py",
+        """        sitting = Sitting.objects.select_for_update().get(pk=item.sitting_id)
+        if sitting.status != Status.IN_PROGRESS:
+            raise SittingNotInProgress("Sitting is not in progress.")""",
+        """        if item.sitting.status != Status.IN_PROGRESS:
+            raise SittingNotInProgress("Sitting is not in progress.")
+        sitting = Sitting.objects.select_for_update().get(pk=item.sitting_id)""",
+    ),
+    (
+        # Drops the guard, so a sitting can be submitted twice and every mark is
+        # recomputed and rewritten. Killed by test_submitting_twice_raises_an_exception.
+        "submit-guard-removed",
+        "exams/marking.py",
+        """        sitting = Sitting.objects.select_for_update().get(pk=sitting.pk)
+        if sitting.status != Status.IN_PROGRESS:
+            raise SittingNotInProgress("Sitting is not in progress.")
+""",
+        "        sitting = Sitting.objects.select_for_update().get(pk=sitting.pk)\n",
+    ),
+    (
+        # Sends choice items down the numeric branch and vice versa. Kills eight tests,
+        # so it proves little on its own -- it is here because a branch with no mutant
+        # is a branch nobody has confirmed is reached.
+        "marking-scheme-branch-swapped",
+        "exams/marking.py",
+        "            if item.marking_scheme == MarkingScheme.CHOICE:",
+        "            if item.marking_scheme != MarkingScheme.CHOICE:",
     ),
 ]
 

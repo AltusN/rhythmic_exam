@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from exams.models import ExamComponent
 from scoring.types import BandRow, GradeBand, MarkingTable
 
@@ -16,3 +18,29 @@ def build_grade_bands(component: ExamComponent) -> list[GradeBand]:
         GradeBand(name=row.name, minimum=row.minimum)
         for row in component.grade_bands.all()
     ]
+
+
+def marking_table_as_json(table: MarkingTable) -> dict:
+    return {
+        "difference_steps": [str(step) for step in table.difference_steps],
+        "rows": [
+            {
+                "expert_minimum": str(row.expert_minimum),
+                "percentages": [str(p) for p in row.percentages],
+            }
+            for row in table.rows
+        ],
+    }
+
+
+def marking_table_from_json(data: dict) -> MarkingTable:
+    return MarkingTable(
+        difference_steps=tuple(Decimal(step) for step in data["difference_steps"]),
+        rows=tuple(
+            BandRow(
+                expert_minimum=Decimal(row["expert_minimum"]),
+                percentages=tuple(Decimal(p) for p in row["percentages"]),
+            )
+            for row in data["rows"]
+        ),
+    )
