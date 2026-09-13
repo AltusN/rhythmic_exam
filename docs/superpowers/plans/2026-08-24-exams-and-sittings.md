@@ -1026,7 +1026,24 @@ dependency; a sixth apparatus would have scored everyone out of 125 while still 
 computed at display time, editing a band would silently regrade every historical result —
 F1 again, one level up. Store `percentage` and `grade_name` at submission.
 
-- [ ] **Step 1: Write `ComponentResult`**
+**The bands must be frozen as well, and this task cannot start without deciding it**
+(noted 2026-09-13). `build_grade_bands(component)` needs an `ExamComponent`, and
+`SittingItem` deliberately holds no foreign key to one — the same wall Task 8 hit with
+the marking table, and there is no minimal path around it. Freeze them the same way:
+a `grade_bands` `JSONField` on `SittingItem`, written for every item at start, read
+back from any item of a group at submission. Measured before choosing: five bands
+serialise to **180 bytes**, a fourteenth of the marking table's 2.5 KB, so 3.6 KB per
+practical sitting — the duplication argument that made a `Sitting`-level store worth
+considering for the table does not apply here. One mechanism, and `submit_sitting`
+keeps reading only the rows it is marking.
+
+- [ ] **Step 1: Write the failing tests** — the table below, one at a time
+
+Before the code, not after; the step order said otherwise until 2026-09-13 and Tasks 7
+and 8 both inverted it in practice. Start with the F5 marker: it fails on
+`ComponentResult` not existing, which is the red you want.
+
+- [ ] **Step 2: Write `ComponentResult`**
 
 `sitting` FK `CASCADE`, `related_name="results"`. `component_name` a `CharField` — the frozen
 name from Task 7, which is what groups the items. `percentage` a
@@ -1034,7 +1051,7 @@ name from Task 7, which is what groups the items. `percentage` a
 
 `UniqueConstraint(("sitting", "component_name"))`.
 
-- [ ] **Step 2: Extend `submit_sitting`**
+- [ ] **Step 3: Extend `submit_sitting`**
 
 After marking every item, group them by `component_name`, call `score_component` on each
 group's `percentage`, then `grade(percentage=..., bands=build_grade_bands(...))`, and
@@ -1043,7 +1060,7 @@ write one `ComponentResult` per group.
 `score_component` **raises** on an empty sequence rather than returning 0 — let it. A
 component with no items is a bug in the freeze, and a silent 0 is the F10 shape.
 
-- [ ] **Step 3: Write the failing tests**
+The tests, for reference from Step 1:
 
 | test | asserts |
 |---|---|
@@ -1051,9 +1068,9 @@ component with no items is a bug in the freeze, and a silent 0 is the F10 shape.
 | `test_a_practical_sitting_produces_four_component_results` | one per aspect |
 | `test_the_two_band_sets_grade_the_same_percentage_differently` | Excellent is **80%** for Difficulty and **90%** for Artistry/Execution, so `Decimal("85")` grades Excellent under a `DA` component and one band lower under an `AV` one. Build both components and assert the two `grade_name` values differ |
 | `test_editing_a_grade_band_does_not_regrade_a_submitted_sitting` | store, edit the band row, reload, assert `grade_name` unchanged |
-| `test_a_component_with_no_items_raises_rather_than_scoring_zero` | `score_component`'s guard reaching the surface |
+| ~~`test_a_component_with_no_items_raises_rather_than_scoring_zero`~~ | **Dropped 2026-09-13: unreachable.** `submit_sitting` groups items by `component_name`, so a component with no items produces no group and `score_component` is never called with an empty sequence. The guard is real and tested inside `scoring`'s own suite; there is no path to it from here |
 
-- [ ] **Step 4: Run red, implement, green**
+- [ ] **Step 4: Green, with every test having been seen red first**
 
 - [ ] **Step 5: Sweep, lint, commit**
 

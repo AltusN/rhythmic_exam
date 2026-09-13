@@ -675,8 +675,8 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 
 Latest run, after Task 8, 2026-09-12: **57 mutants, 56 killed, 1 survived** in 112s
 — the survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
-of scope and which has now survived nine consecutive runs. **It costs 11.5s of the
-99s run and is the largest single item in it**; either fix `list_filter` or drop the
+of scope and which has now survived ten consecutive runs. **It costs about 11.5s of
+the 112s run and is the largest single item in it**; either fix `list_filter` or drop the
 mutant, because a permanently red SURVIVED line trains you to skim the one line in
 the report that is meant to stop you. **How the sweep scopes its tests, which mutants
 need `--create-db`, where a claim actually lives and what `UNAPPLIED` means are in the
