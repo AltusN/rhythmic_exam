@@ -1037,6 +1037,18 @@ practical sitting — the duplication argument that made a `Sitting`-level store
 considering for the table does not apply here. One mechanism, and `submit_sitting`
 keeps reading only the rows it is marking.
 
+**The freeze refuses a component with no grade bands** (decided 2026-09-15). `grade`
+raises on an empty band list, so without a guard the failure arrives at *submission* —
+after a candidate has sat the whole paper. The marking table already failed at freeze,
+but only because `MarkingTable.__post_init__` happens to validate and `GradeBand` does
+not; that was an accident of where a check lived, not a decision. `start_sitting` now
+raises `ComponentHasNoGradeBands(component.name)`. Cost accepted knowingly: every
+component built in `test_freeze.py` must now author bands it never reads, through a
+`_with_grade_bands` helper. **The guard shipped broken first** — renamed at the class
+but not at the `raise`, so firing it gave `NameError` — under a fully green suite,
+because fixtures that make every other test work are exactly what stop a guard ever
+firing. Its own test is what exposed it.
+
 - [ ] **Step 1: Write the failing tests** — the table below, one at a time
 
 Before the code, not after; the step order said otherwise until 2026-09-13 and Tasks 7
@@ -1069,6 +1081,7 @@ The tests, for reference from Step 1:
 | `test_the_two_band_sets_grade_the_same_percentage_differently` | Excellent is **80%** for Difficulty and **90%** for Artistry/Execution, so `Decimal("85")` grades Excellent under a `DA` component and one band lower under an `AV` one. Build both components and assert the two `grade_name` values differ |
 | `test_editing_a_grade_band_does_not_regrade_a_submitted_sitting` | store, edit the band row, reload, assert `grade_name` unchanged |
 | ~~`test_a_component_with_no_items_raises_rather_than_scoring_zero`~~ | **Dropped 2026-09-13: unreachable.** `submit_sitting` groups items by `component_name`, so a component with no items produces no group and `score_component` is never called with an empty sequence. The guard is real and tested inside `scoring`'s own suite; there is no path to it from here |
+| `test_starting_a_sitting_raises_on_a_component_with_no_grade_bands` | **added 2026-09-15, lives in `tests/exams/test_freeze.py`.** The guard's own test. Kills both the guard's deletion (`DID NOT RAISE`) and the half-finished rename it actually shipped with (`NameError`). Must not use `_with_grade_bands` — the absence is the experiment |
 
 - [ ] **Step 4: Green, with every test having been seen red first**
 
