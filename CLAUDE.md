@@ -137,6 +137,13 @@ three leak mechanisms killed — a printed value, a conditional CSS class, condi
 markup — including forms neither of us enumerated. Pair it with a positive control
 (`len(list_items) == 2`) so an empty page cannot pass.
 
+**Assert the value, not that two values differ.** The exams plan's Task 9 grades one
+percentage against two band sets and asserts each grade name as a literal. Asserting
+merely that they differ catches a band set leaking across components — both grades
+come out equal — but passes when the two sets are *swapped*, because two wrong answers
+still differ. Verified 2026-09-17 against three leak mutants: the literals killed all
+three, the inequality missed the swap.
+
 So the rule is mechanical, not a matter of suspicion, because suspicion is
 demonstrably not a reliable trigger:
 
@@ -608,8 +615,29 @@ pins it.
 
 **Task 8 landed, `0dedf18`, and F3 and F4 close with it.** `exams/marking.py` holds
 `record_response` and `submit_sitting`; marks are written once at submission and
-nothing recomputes them. **Next action is Task 9, component results and F5.** Then
-Task 10, then accounts and the roster, then the React island last.
+nothing recomputes them.
+
+**Task 9 landed, `1722971`, and F5 closes with it.** `ComponentResult` stores one
+percentage and one grade per component, written once at submission. `score_component`
+takes the mean of per-item percentages, so legacy's magic 20 has nowhere to hide. Two
+mutants pin it: the bare sum, and a divisor hard-coded to the item count — the second
+is invisible at five items, which is why the F5 test insists on six and asserts the
+item count before anything else. **Next action is Task 10, admin and the backfill.**
+Then accounts and the roster, then the React island last.
+
+**Grade bands are frozen onto the item as well** (decided 2026-09-13). Grading needs
+bands, `SittingItem` holds no component to ask, and a lookup by frozen
+`component_name` is F2's shape — so they ride on the item like the marking table, at
+180 bytes a set. `submit_sitting` is a pure function of the rows it reads. Only
+`test_the_grade_uses_the_bands_frozen_at_start_of_sitting` pins that:
+`results-uses-live-bands` survived all 196 other tests, because every other test edits
+bands *after* submission, when live and frozen still agree.
+
+**The freeze refuses a component with no grade bands, and that guard shipped raising
+`NameError`** — renamed at its class but not at its `raise` — under 192 green tests.
+**A guard clause is the production code a suite is least likely to execute**, because
+the fixtures that make every other test pass are exactly what stop it firing. Its own
+test is what found it, and `grade-band-guard-wrong-name` keeps it found.
 
 **F3 cannot fail quietly here, and that is a property of `Decimal` rather than of a
 test.** `Decimal` refuses `float` operands, so a float reaching a mark raises
@@ -673,10 +701,13 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 8, 2026-09-12: **57 mutants, 56 killed, 1 survived** in 112s
+Latest run, after Task 9, 2026-09-17: **64 mutants, 63 killed, 1 survived** in 205s
 — the survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
-of scope and which has now survived ten consecutive runs. **It costs about 11.5s of
-the 112s run and is the largest single item in it**; either fix `list_filter` or drop the
+of scope and which has now survived eleven consecutive runs. **It was the largest
+single item at 11.5s when the run was last measured, on 2026-09-12**; the run has since
+nearly doubled, most likely because `tests/exams/test_results.py` entered both the
+exams scope and `TEST_PATHS` and every test in it freezes and marks a sitting — that
+attribution is reasoning, not a measurement. Either fix `list_filter` or drop the
 mutant, because a permanently red SURVIVED line trains you to skim the one line in
 the report that is meant to stop you. **How the sweep scopes its tests, which mutants
 need `--create-db`, where a claim actually lives and what `UNAPPLIED` means are in the
