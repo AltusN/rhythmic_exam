@@ -52,6 +52,7 @@ class SittingItem(models.Model):
     position = models.PositiveSmallIntegerField()
     question_snapshot = models.JSONField()
     marking_key = models.JSONField()
+    grade_bands = models.JSONField()
     response = models.JSONField(null=True)
     percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True)
 
@@ -65,3 +66,25 @@ class SittingItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.component_name} - {self.position}"
+
+
+class ComponentResult(models.Model):
+    sitting = models.ForeignKey(
+        Sitting, on_delete=models.CASCADE, related_name="results"
+    )
+    component_name = models.CharField(max_length=50)
+    component_position = models.PositiveSmallIntegerField()
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    grade_name = models.CharField(max_length=50)
+
+    class Meta:
+        ordering = ["component_position", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sitting", "component_name"],
+                name="uq_one_result_per_component_per_sitting",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.component_name} - {self.percentage}"

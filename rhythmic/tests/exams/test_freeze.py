@@ -2,13 +2,19 @@ from decimal import Decimal
 
 import pytest
 
-from exams.freeze import QuestionHasNoAnswer, SittingAlreadyStarted, start_sitting
+from exams.freeze import (
+    ComponentHasNoGradeBands,
+    QuestionHasNoAnswer,
+    SittingAlreadyStarted,
+    start_sitting,
+)
 from exams.models import (
     ComponentPracticalItem,
     ComponentQuestion,
     Exam,
     ExamComponent,
     ExamKind,
+    GradeBandRow,
     MarkingScheme,
     MarkingTableRow,
     Sitting,
@@ -26,15 +32,30 @@ from questions.models import (
 )
 
 
+def _with_grade_bands(component: ExamComponent) -> ExamComponent:
+    for name, minimum in [
+        ("Excellent", "80.00"),
+        ("Very Good", "70.00"),
+        ("Good", "60.00"),
+        ("Pass", "50.00"),
+    ]:
+        GradeBandRow.objects.create(
+            component=component, name=name, minimum=Decimal(minimum)
+        )
+    return component
+
+
 def _theory_exam_and_component(*, level: int) -> ExamComponent:
     exam = Exam.objects.create(kind=ExamKind.THEORY, level=level, year=2026)
-    return ExamComponent.objects.create(
-        exam=exam,
-        name="Theory Component",
-        position=1,
-        marking_scheme=MarkingScheme.CHOICE,
-        aspect="",
-        difference_steps=[],
+    return _with_grade_bands(
+        ExamComponent.objects.create(
+            exam=exam,
+            name="Theory Component",
+            position=1,
+            marking_scheme=MarkingScheme.CHOICE,
+            aspect="",
+            difference_steps=[],
+        )
     )
 
 
@@ -113,21 +134,25 @@ def test_starting_a_sitting_creates_one_item_per_member(django_user_model):
     # or per-sitting counts can't be confused with per-member. Distinct aspects
     # only to satisfy uq_one_component_per_aspect_per_exam; marking scheme stays
     # CHOICE so both use the same freeze path as theory.
-    component_a = ExamComponent.objects.create(
-        exam=exam,
-        name="Component A",
-        position=1,
-        marking_scheme=MarkingScheme.CHOICE,
-        aspect=Aspect.DA,
-        difference_steps=[],
+    component_a = _with_grade_bands(
+        ExamComponent.objects.create(
+            exam=exam,
+            name="Component A",
+            position=1,
+            marking_scheme=MarkingScheme.CHOICE,
+            aspect=Aspect.DA,
+            difference_steps=[],
+        )
     )
-    component_b = ExamComponent.objects.create(
-        exam=exam,
-        name="Component B",
-        position=2,
-        marking_scheme=MarkingScheme.CHOICE,
-        aspect=Aspect.DB,
-        difference_steps=[],
+    component_b = _with_grade_bands(
+        ExamComponent.objects.create(
+            exam=exam,
+            name="Component B",
+            position=2,
+            marking_scheme=MarkingScheme.CHOICE,
+            aspect=Aspect.DB,
+            difference_steps=[],
+        )
     )
 
     references_by_component = {
@@ -162,13 +187,15 @@ def test_a_frozen_response_starts_null_not_empty(django_user_model):
     judge = django_user_model.objects.create_user(username="Judge Judy", password="x")
     exam = Exam.objects.create(kind=ExamKind.THEORY, level=1, year=2026)
 
-    component = ExamComponent.objects.create(
-        exam=exam,
-        name="Component A",
-        position=1,
-        marking_scheme=MarkingScheme.CHOICE,
-        aspect=Aspect.DA,
-        difference_steps=[],
+    component = _with_grade_bands(
+        ExamComponent.objects.create(
+            exam=exam,
+            name="Component A",
+            position=1,
+            marking_scheme=MarkingScheme.CHOICE,
+            aspect=Aspect.DA,
+            difference_steps=[],
+        )
     )
 
     question = _question_with_correct_option("RG-2026-300")
@@ -198,6 +225,7 @@ def test_items_come_back_in_position_order(django_user_model):
             component_name="Component A",
             component_position=1,
             marking_scheme=MarkingScheme.CHOICE,
+            grade_bands=[],
             position=position,
             question_snapshot={},
             marking_key={},
@@ -219,16 +247,18 @@ def test_the_marking_key_holds_the_expert_score_as_a_string(django_user_model):
         routine=routine, aspect=Aspect.DA, expert_score=Decimal("8.50")
     )
 
-    component = ExamComponent.objects.create(
-        exam=exam,
-        name="Component DA",
-        position=1,
-        marking_scheme=MarkingScheme.NUMERIC,
-        aspect=Aspect.DA,
-        difference_steps=[
-            Decimal("0.10"),
-            Decimal("0.20"),
-        ],
+    component = _with_grade_bands(
+        ExamComponent.objects.create(
+            exam=exam,
+            name="Component DA",
+            position=1,
+            marking_scheme=MarkingScheme.NUMERIC,
+            aspect=Aspect.DA,
+            difference_steps=[
+                Decimal("0.10"),
+                Decimal("0.20"),
+            ],
+        )
     )
     MarkingTableRow.objects.create(
         component=component,
@@ -273,7 +303,7 @@ def test_starting_a_sitting_does_not_issue_a_query_per_member(
     sitting = Sitting.objects.create(judge=judge, exam=exam)
 
     # deliberately low — pins the query count so an N+1 regression fails loudly
-    with django_assert_num_queries(13):
+    with django_assert_num_queries(15):
         start_sitting(sitting)
 
 
@@ -296,4 +326,29 @@ def test_starting_a_sitting_raises_on_a_question_with_no_correct_option(
     sitting = Sitting.objects.create(judge=judge, exam=exam)
 
     with pytest.raises(QuestionHasNoAnswer):
+        start_sitting(sitting)
+
+
+@pytest.mark.django_db
+def test_starting_a_sitting_raises_on_a_component_with_no_grade_bands(
+    django_user_model,
+):
+    judge = django_user_model.objects.create_user(username="Judge Judy", password="x")
+    exam = Exam.objects.create(kind=ExamKind.THEORY, level=1, year=2026)
+    component = ExamComponent.objects.create(
+        exam=exam,
+        name="Component with no grade bands",
+        position=1,
+        marking_scheme=MarkingScheme.NUMERIC,
+        aspect=Aspect.DA,
+        difference_steps=[
+            Decimal("0.10"),
+            Decimal("0.20"),
+        ],
+    )
+    exam = component.exam
+
+    sitting = Sitting.objects.create(judge=judge, exam=exam)
+
+    with pytest.raises(ComponentHasNoGradeBands):
         start_sitting(sitting)

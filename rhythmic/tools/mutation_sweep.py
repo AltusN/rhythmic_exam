@@ -43,6 +43,7 @@ EXAMS_TESTS = [
     "tests/exams/test_sitting.py",
     "tests/exams/test_freeze.py",
     "tests/exams/test_marking.py",
+    "tests/exams/test_results.py",
 ]
 # Only added to the fallback, never to a per-app scope: this is the one test that
 # catches model-versus-migration drift across every app, and the re-run against
@@ -507,6 +508,79 @@ MUTANTS = [
         "exams/marking.py",
         "            if item.marking_scheme == MarkingScheme.CHOICE:",
         "            if item.marking_scheme != MarkingScheme.CHOICE:",
+    ),
+    (
+        # F5 itself: the total instead of the mean. Legacy summed twenty marks worth
+        # five each and printed the total with a % on it, correct only because
+        # 5 apparatus x 4 aspects happened to equal 20.
+        "results-sum-not-mean",
+        "exams/marking.py",
+        "            percentage = score_component([item.percentage for item in group])",
+        "            percentage = sum(item.percentage for item in group)",
+    ),
+    (
+        # The subtler half of F5: a divisor that happens to match the item count.
+        # Invisible at five items, visible at six -- which is why the F5 test insists
+        # on six and asserts len(items) == 6 before anything else.
+        "results-divisor-hardcoded",
+        "exams/marking.py",
+        "            percentage = score_component([item.percentage for item in group])",
+        "            percentage = sum(item.percentage for item in group) / Decimal(5)",
+    ),
+    (
+        # Grades every component against the live ExamComponent instead of the bands
+        # frozen into its items. grade() only reads .name and .minimum, so GradeBandRow
+        # rows duck-type straight in. Killed ONLY by
+        # test_the_grade_uses_the_bands_frozen_at_start_of_sitting: every other test
+        # edits bands after submission, when live and frozen still agree. Verified
+        # 2026-09-17 to survive all 196 tests without it.
+        "results-uses-live-bands",
+        "exams/marking.py",
+        "                        bands=grade_bands_from_json(group[0].grade_bands),",
+        "                        bands=sitting.exam.components.get(\n"
+        "                            name=component_name\n"
+        "                        ).grade_bands.all(),",
+    ),
+    (
+        # Grades every group with the first item's bands, so one component's band set
+        # leaks across all of them. Killed by the two-band-sets test -- and note an
+        # assertion of the form `da != av` also catches this one, while missing the
+        # swap, which is why that test asserts two literals.
+        "results-bands-leak-across-components",
+        "exams/marking.py",
+        "                        bands=grade_bands_from_json(group[0].grade_bands),",
+        "                        bands=grade_bands_from_json(\n"
+        "                            sitting.items.first().grade_bands\n"
+        "                        ),",
+    ),
+    (
+        # The freeze accepts a component that cannot be graded, so grade() raises at
+        # submission instead -- after a candidate has sat the whole paper.
+        "grade-band-guard-removed",
+        "exams/freeze.py",
+        "            if not bands_json:\n"
+        "                raise ComponentHasNoGradeBands(component.name)\n",
+        "",
+    ),
+    (
+        # The defect this guard actually shipped with on 2026-09-15: renamed at the
+        # class but not at the raise, so firing it gave NameError under a fully green
+        # suite. Every component in the suite had just gained bands, which is exactly
+        # what stopped the guard ever running. Its own test is what found it.
+        "grade-band-guard-wrong-name",
+        "exams/freeze.py",
+        "raise ComponentHasNoGradeBands(component.name)",
+        "raise ComponentHasNoQuestions(component.name)",
+    ),
+    (
+        # component_position exists so results read DA, DB, AV, EX rather than
+        # alphabetically. Ordering by name is caught by the four-results test;
+        # removing the ordering outright needs the direct-creation test, because the
+        # freeze always inserts results in position order anyway.
+        "ordering-componentresult",
+        "exams/models/sitting.py",
+        'ordering = ["component_position", "pk"]',
+        'ordering = ["component_name"]',
     ),
 ]
 

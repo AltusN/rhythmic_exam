@@ -4,7 +4,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from exams.models import Sitting, SittingItem, Status
-from exams.tables import build_marking_table, marking_table_as_json
+from exams.tables import (
+    build_grade_bands,
+    build_marking_table,
+    grade_bands_as_json,
+    marking_table_as_json,
+)
 
 
 class SittingAlreadyStarted(Exception):
@@ -12,6 +17,10 @@ class SittingAlreadyStarted(Exception):
 
 
 class QuestionHasNoAnswer(Exception):
+    pass
+
+
+class ComponentHasNoGradeBands(Exception):
     pass
 
 
@@ -76,13 +85,18 @@ def start_sitting(sitting: Sitting) -> None:
         positions = count(1)
         items = []
 
-        for component in sitting.exam.components.all():
+        for component in sitting.exam.components.prefetch_related(
+            "marking_rows", "grade_bands"
+        ):
             practical_members = component.practical_item_members.select_related(
                 "practical_item__routine__apparatus"
             )
             table_json = None
             if practical_members:
                 table_json = marking_table_as_json(build_marking_table(component))
+            bands_json = grade_bands_as_json(build_grade_bands(component))
+            if not bands_json:
+                raise ComponentHasNoGradeBands(component.name)
             frozen = [
                 _frozen_question(membership.question)
                 for membership in component.question_members.select_related(
@@ -102,6 +116,7 @@ def start_sitting(sitting: Sitting) -> None:
                         component_name=component.name,
                         component_position=component.position,
                         marking_scheme=component.marking_scheme,
+                        grade_bands=bands_json,
                         position=next(positions),
                         question_snapshot=question_snapshot,
                         marking_key=marking_key,

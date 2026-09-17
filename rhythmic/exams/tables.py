@@ -44,3 +44,13 @@ def marking_table_from_json(data: dict) -> MarkingTable:
             for row in data["rows"]
         ),
     )
+
+
+def grade_bands_as_json(bands: list[GradeBand]) -> list[dict]:
+    return [{"name": band.name, "minimum": str(band.minimum)} for band in bands]
+
+
+def grade_bands_from_json(data: list[dict]) -> list[GradeBand]:
+    return [
+        GradeBand(name=row["name"], minimum=Decimal(row["minimum"])) for row in data
+    ]

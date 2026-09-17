@@ -10,6 +10,7 @@ from exams.models import (
     Exam,
     ExamComponent,
     ExamKind,
+    GradeBandRow,
     MarkingScheme,
     MarkingTableRow,
     Sitting,
@@ -20,7 +21,7 @@ from questions.models import Apparatus, Aspect, Option, PracticalItem, Question,
 
 def _theory_exam_and_component(*, level: int) -> ExamComponent:
     exam = Exam.objects.create(kind=ExamKind.THEORY, level=level, year=2026)
-    return ExamComponent.objects.create(
+    component = ExamComponent.objects.create(
         exam=exam,
         name="Theory Component",
         position=1,
@@ -28,6 +29,14 @@ def _theory_exam_and_component(*, level: int) -> ExamComponent:
         aspect="",
         difference_steps=[],
     )
+    for name, minimum in (
+        ("Fail", Decimal("0.00")),
+        ("Pass", Decimal("50.00")),
+        ("Good", Decimal("65.00")),
+        ("Excellent", Decimal("80.00")),
+    ):
+        GradeBandRow.objects.create(component=component, name=name, minimum=minimum)
+    return component
 
 
 def _theory_exam_and_question(*, level: int = 1):
@@ -120,6 +129,13 @@ def test_a_numeric_response_is_marked_through_the_marking_table(django_user_mode
             Decimal("1.00"),
         ],
     )
+    for name, minimum in (
+        ("Fail", Decimal("0.00")),
+        ("Pass", Decimal("50.00")),
+        ("Good", Decimal("65.00")),
+        ("Excellent", Decimal("80.00")),
+    ):
+        GradeBandRow.objects.create(component=component, name=name, minimum=minimum)
     MarkingTableRow.objects.create(
         component=component,
         expert_minimum=Decimal("0.00"),
@@ -184,6 +200,13 @@ def _practical_sitting(django_user_model):
             Decimal("1.00"),
         ],
     )
+    for name, minimum in (
+        ("Fail", Decimal("0.00")),
+        ("Pass", Decimal("50.00")),
+        ("Good", Decimal("65.00")),
+        ("Excellent", Decimal("80.00")),
+    ):
+        GradeBandRow.objects.create(component=component, name=name, minimum=minimum)
     MarkingTableRow.objects.create(
         component=component,
         expert_minimum=Decimal("0.00"),
