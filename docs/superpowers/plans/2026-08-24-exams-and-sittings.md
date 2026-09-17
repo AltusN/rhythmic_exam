@@ -1098,8 +1098,9 @@ Subject: `feat(exams): store component percentages and grades at submission (F5)
 ## Task 10: Admin, and the backfill
 
 **Files:**
-- Create: `exams/admin.py`
-- Modify: `tools/mutation_sweep.py`
+- Create: `exams/admin.py` — it exists as Django's stub, one comment line, nothing to build on
+- Modify: `tools/mutation_sweep.py` — **Claude's**, per the 2026-09-06 agreement; the
+  catalogue entries and their explanations are not Altus's to type
 - Test: `tests/exams/test_admin.py`
 
 **Interfaces:**
@@ -1111,7 +1112,13 @@ the table rows are **edited** — full admin, inlines, search. `Sitting`, `Sitti
 `has_change_permission` returning `False` is the construct; a read-only admin over frozen
 rows is the difference between an audit trail and a suggestion.
 
-- [ ] **Step 1: Register the definition models**
+- [ ] **Step 1: Write the failing tests** — the table below, one at a time
+
+Before the code, not after. The step order said otherwise here until 2026-09-17, and
+Tasks 7, 8 and 9 all inverted it in practice; see `CLAUDE.md`, "He writes the test
+before the code where the plan says write the failing tests".
+
+- [ ] **Step 2: Register the definition models**
 
 `ExamAdmin` with a `ComponentInline`. `ExamComponentAdmin` with `ComponentQuestionInline`,
 `MarkingTableRowInline` and `GradeBandRowInline`.
@@ -1122,12 +1129,17 @@ never binds. A `200` from an admin POST means the form re-rendered — it failed
 
 `list_select_related` wherever `list_display` crosses more than one relation.
 
-- [ ] **Step 2: Register the sitting models read-only**
+- [ ] **Step 3: Register the sitting models read-only**
 
 `SimpleHistoryAdmin` on `Sitting`. `has_add_permission` and `has_change_permission` returning
 `False` on `SittingItem` and `ComponentResult`; `readonly_fields` naming every field.
 
-- [ ] **Step 3: Write the failing tests**
+**"Every field" has grown since this was written.** `SittingItem` gained `grade_bands`
+in Task 9 and `ComponentResult` carries `component_position`, which the plan's own
+field list for it does not mention. A `readonly_fields` that misses one leaves exactly
+that field editable on a frozen row, and nothing in Django objects.
+
+The tests, for reference from Step 1:
 
 | test | asserts |
 |---|---|
@@ -1139,7 +1151,7 @@ never binds. A `200` from an admin POST means the form re-rendered — it failed
 The second test's assertion must be on the **data**, not the status code. A read-only admin
 that returns 302 and saves anyway is exactly the failure it exists to catch.
 
-- [ ] **Step 4: Run red, implement, green**
+- [ ] **Step 4: Green, with every test having been seen red first**
 
 - [ ] **Step 5: Full sweep and the plan close**
 
