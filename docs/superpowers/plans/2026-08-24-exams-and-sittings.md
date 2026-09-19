@@ -1121,7 +1121,17 @@ before the code where the plan says write the failing tests".
 - [ ] **Step 2: Register the definition models**
 
 `ExamAdmin` with a `ComponentInline`. `ExamComponentAdmin` with `ComponentQuestionInline`,
-`MarkingTableRowInline` and `GradeBandRowInline`.
+**`ComponentPracticalItemInline`**, `MarkingTableRowInline` and `GradeBandRowInline`.
+
+**The practical inline was missing until 2026-09-19 and its absence was not neutral.**
+Membership is two models, one per half of the exam. With only the question inline an
+official can author a theory component and its questions, while a practical
+component's members stay unreachable — and the practical is the real exam, the theory
+being explicitly "no longer a real certification component". Shipping without it means
+shipping an admin that can author only the half which decides nothing.
+
+Its prefix is `practical_item_members`, the FK's `related_name`, exactly as the
+question inline's is `question_members`.
 
 Remember Task 7 of the questions plan: **the inline prefix is the FK's `related_name`**, not
 `<model>_set`, and every inline on a page needs its four management-form keys or the formset
@@ -1147,6 +1157,7 @@ The tests, for reference from Step 1:
 | `test_a_sitting_item_cannot_be_changed_through_the_admin` | POST to the change URL, assert a redirect or 403 **and** that the row is unchanged after reload |
 | `test_the_sitting_history_page_shows_the_previous_status` | assert on the **old** value; the current one is chrome, because `__str__` renders in the page title |
 | `test_admin_pages_require_login` | parametrized over the changelist URL names, no `django_db` marker |
+| `test_a_practical_component_takes_members_through_the_admin` | **added 2026-09-19 with the inline above.** POST to the component change URL with the `practical_item_members` formset filled, then assert the `ComponentPracticalItem` row exists. Without it the inline is dark code: a mutant dropping it from `inlines` survives every other test here, since nothing else renders or posts that formset. Follow `tests/questions/test_admin.py`'s saving test for the four management-form keys, and remember a `200` from an admin POST means the form re-rendered — it failed |
 
 The second test's assertion must be on the **data**, not the status code. A read-only admin
 that returns 302 and saves anyway is exactly the failure it exists to catch.
