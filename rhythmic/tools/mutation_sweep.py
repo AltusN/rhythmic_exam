@@ -397,8 +397,11 @@ MUTANTS = [
     (
         "history-off-sitting",
         "exams/models/sitting.py",
-        "outcome = models.CharField(max_length=255, blank=True)\n\n    history = HistoricalRecords()",
-        "outcome = models.CharField(max_length=255, blank=True)",
+        'override_reason = models.TextField(blank=True, default="")\n\n'
+        "    history = HistoricalRecords()",
+        'override_reason = models.TextField(blank=True, default="")',
+        # Re-anchored 2026-09-25: Task 4 of the judge-records plan put fields
+        # between `outcome` and `history`, and this went UNAPPLIED.
     ),
     (
         "ondelete-sitting-judge",

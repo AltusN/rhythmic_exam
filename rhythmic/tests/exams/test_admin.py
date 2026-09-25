@@ -263,7 +263,12 @@ def test_a_sitting_cannot_be_changed_through_the_admin(admin_client, django_user
 
     url = reverse("admin:exams_sitting_change", args=[sitting.pk])
     # DateTimeField renders as a split widget: one key for the date, one for the time
-    admin_client.post(
+    # A 403 is the one response only the lock produces: a form that fails validation
+    # re-renders with 200 and ALSO leaves the row unchanged, so the data assertion
+    # below cannot tell the two apart on its own. That happened on 2026-09-25, when
+    # Sitting gained a required candidate_number this payload lacked and the test went
+    # green against an editable admin.
+    response = admin_client.post(
         url,
         {
             "judge": sitting.judge.pk,
@@ -277,9 +282,13 @@ def test_a_sitting_cannot_be_changed_through_the_admin(admin_client, django_user
             "submitted_at_1": "",
             "certified_at_0": "",
             "certified_at_1": "",
+            "candidate_number": sitting.candidate_number,
+            "override_by": "",
+            "override_reason": "",
             "_save": "Save",
         },
     )
+    assert response.status_code == 403
 
     sitting.refresh_from_db()
     assert sitting.status == Status.SUBMITTED
