@@ -12,6 +12,7 @@ Nothing is committed by this script: each source file is restored in a `finally`
 block, and the run ends by asserting `git status` is clean.
 """
 
+import importlib.util
 import pathlib
 import subprocess
 import sys
@@ -1035,6 +1036,24 @@ for model, tail in HISTORY_TAILS.items():
     )
 
 
+def write_source(source: pathlib.Path, text: str) -> None:
+    """Write `text` and discard `source`'s cached bytecode.
+
+    A .pyc is trusted when the source's size and mtime -- to the second -- match
+    what it recorded. A same-length mutant (`FAIL = 5` -> `FAIL = 0`) written and
+    restored within one second leaves the mutant's bytecode in place, and the next
+    ordinary test run executes the mutant: found 2026-09-25, when the suite failed
+    on `Category.FAIL: 0` with `FAIL = 5` on disk. The reverse is worse -- a mutant
+    written within the second of a cached original runs the original, and reports
+    SURVIVED having never run at all.
+    """
+    source.write_text(text)
+    if source.suffix == ".py":
+        pathlib.Path(importlib.util.cache_from_source(str(source))).unlink(
+            missing_ok=True
+        )
+
+
 def run_tests(paths: list[str], *, fresh_database: bool) -> int:
     """Run `paths` once. `fresh_database` rebuilds the test database first.
 
@@ -1091,7 +1110,7 @@ def main() -> int:
             continue
         ran += 1
         try:
-            source.write_text(original.replace(before, after, 1))
+            write_source(source, original.replace(before, after, 1))
             fresh = "migrations" in relative_path
             returncode = 0
             for batch in batches_for(relative_path):
@@ -1101,7 +1120,7 @@ def main() -> int:
                 if returncode != 0:
                     break
         finally:
-            source.write_text(original)
+            write_source(source, original)
         if returncode == 0:
             survived.append(name)
         print(f"{'SURVIVED' if returncode == 0 else 'KILLED':9s} {name}")
