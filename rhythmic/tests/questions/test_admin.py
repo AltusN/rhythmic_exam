@@ -37,6 +37,26 @@ def test_practicalitem_changelist_renders(client, admin_user):
 
 
 @pytest.mark.django_db
+def test_practicalitem_changelist_offers_an_aspect_filter(client, admin_user):
+    apparatus = Apparatus.objects.create(name="Rope", position=1)
+    routine = Routine.objects.create(
+        label="Routine 1",
+        apparatus=apparatus,
+        video="routines/routine1.mp4",
+    )
+    PracticalItem.objects.create(
+        routine=routine, aspect=Aspect.DA, expert_score=Decimal("5.00")
+    )
+
+    client.force_login(admin_user)
+    url = reverse("admin:questions_practicalitem_changelist")
+
+    response = client.get(url)
+    # the full query param, not a bare "DA": that appears in the row regardless
+    assert "?aspect__exact=DA" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
 def test_practicalitem_changelist_uses_select_related(
     admin_client, django_assert_num_queries
 ):
