@@ -51,6 +51,10 @@ EXAMS_TESTS = [
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
 ]
+# By name, through -k: `--deselect` takes a node ID, and node IDs are relative to the
+# rootdir, which is the repository root (pytest.ini) -- so "tests/config/..." matched
+# nothing and deselected nothing, silently. Verified 2026-09-25.
+DRIFT_TEST = "test_dry_run_makemigrations"
 # The smoke test is only added to the fallback, never to a per-app scope: it is the
 # one test that catches model-versus-migration drift across every app, and the
 # re-run against "everything" should mean that.
@@ -853,6 +857,12 @@ def run_tests(paths: list[str], *, fresh_database: bool) -> int:
             "-x",
             "--no-header",
             "--create-db" if fresh_database else "--reuse-db",
+            # A migration mutant makes the migration disagree with the model by
+            # construction, so the drift test kills every one of them whether or not
+            # anything else notices -- a KILLED from it means "makemigrations was not
+            # run", never "this constraint is pinned". Found 2026-09-25, when a
+            # weakened unique key survived all of tests/exams and was reported KILLED.
+            *(["-k", f"not {DRIFT_TEST}"] if fresh_database else []),
             "-p",
             "no:cacheprovider",
         ],
