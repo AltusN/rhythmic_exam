@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 from simple_history.models import HistoricalRecords
@@ -10,6 +12,10 @@ class Status(models.TextChoices):
     IN_PROGRESS = "IN_PROGRESS", "In Progress"
     SUBMITTED = "SUBMITTED", "Submitted"
     CERTIFIED = "CERTIFIED", "Certified"
+
+
+def new_candidate_number() -> str:
+    return secrets.token_hex(4).upper()
 
 
 class Sitting(models.Model):
@@ -32,11 +38,37 @@ class Sitting(models.Model):
         related_name="certifications_made",
     )
     outcome = models.CharField(max_length=255, blank=True)
+    # What the certifying official sees instead of a name (General Judges' Rules
+    # section 2.2.1: results reviewed "by judge number not name"). Not the pk, which
+    # is sequential and would reveal the order of enrolment.
+    candidate_number = models.CharField(max_length=8, default=new_candidate_number)
+    # Set only when an official enrolled a judge despite a refusal.
+    override_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="overrides_made",
+    )
+    override_reason = models.TextField(blank=True, default="")
 
     history = HistoricalRecords()
 
     class Meta:
         ordering = ["exam", "started_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "candidate_number"],
+                name="uq_one_candidate_number_per_exam",
+            ),
+            # Both or neither. A blank reason is worse than none: it looks like an
+            # audit trail without being one.
+            models.CheckConstraint(
+                condition=models.Q(override_by__isnull=True, override_reason="")
+                | (models.Q(override_by__isnull=False) & ~models.Q(override_reason="")),
+                name="ck_sitting_override_has_official_and_reason",
+            ),
+        ]
 
     def __str__(self) -> str:
         if self.certified_by:

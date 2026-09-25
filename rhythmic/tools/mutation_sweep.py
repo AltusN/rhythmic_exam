@@ -47,6 +47,7 @@ EXAMS_TESTS = [
     "tests/exams/test_admin.py",
     "tests/exams/test_cycles.py",
     "tests/exams/test_eligibility.py",
+    "tests/exams/test_enrolment.py",
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
@@ -818,6 +819,80 @@ MUTANTS = [
         "exams/eligibility.py",
         "        found.append(Refusal.NOT_ON_ROSTER)\n",
         "        return [Refusal.NOT_ON_ROSTER]\n",
+    ),
+    # --- judge records, Task 4 -------------------------------------------------
+    # Not catalogued: select_for_update() on the judge's profile in enrol(). It only
+    # matters when two enrolments race, and no single-threaded test can make them
+    # race -- see the mutation-sweep skill on tests that have no mutant.
+    (
+        # A reason of spaces passes CHECK (reason <> '') and becomes an override.
+        "enrol-no-strip",
+        "exams/enrolment.py",
+        'reason = (override_reason or "").strip()',
+        'reason = override_reason or ""',
+    ),
+    (
+        "enrol-override-on-eligible",
+        "exams/enrolment.py",
+        "            override_by=official if found else None,\n"
+        '            override_reason=reason if found else "",\n',
+        "            override_by=official if reason else None,\n"
+        "            override_reason=reason,\n",
+    ),
+    (
+        # Counts per exam instead of per cycle: two attempts on 2025 and 2027 papers
+        # leave the 2028 paper looking unattempted.
+        "enrol-count-by-exam",
+        "exams/enrolment.py",
+        "                exam__year__gte=cycle.first_year,\n"
+        "                exam__year__lte=cycle.last_year,\n",
+        "                exam=exam,\n",
+    ),
+    (
+        # Counts every earlier cycle too, so a new cycle never resets the limit.
+        "enrol-count-ignores-cycle-start",
+        "exams/enrolment.py",
+        "                exam__year__gte=cycle.first_year,\n",
+        "",
+    ),
+    (
+        "enrol-open-sitting-never-checked",
+        "exams/enrolment.py",
+        "            has_open_sitting=Sitting.objects.filter(",
+        "            has_open_sitting=False and Sitting.objects.filter(",
+    ),
+    (
+        # A submitted sitting would block the retest a failed judge is allowed.
+        "enrol-open-sitting-any-status",
+        "exams/enrolment.py",
+        "                status__in=[Status.PENDING, Status.IN_PROGRESS],\n",
+        "",
+    ),
+    (
+        "candidate-number-constant",
+        "exams/models/sitting.py",
+        "    return secrets.token_hex(4).upper()",
+        '    return "AAAA0000"',
+    ),
+    (
+        "uq-candidate-number-per-exam",
+        "exams/migrations/0014_candidate_number_required_and_unique.py",
+        'fields=("exam", "candidate_number"),',
+        'fields=("exam", "candidate_number", "judge"),',
+    ),
+    (
+        # Accepts an official with a blank reason.
+        "ck-override-reason-blank",
+        "exams/migrations/0012_sitting_candidate_number_and_override.py",
+        '                        models.Q(("override_reason", ""), _negated=True),\n',
+        "",
+    ),
+    (
+        # Accepts a reason with no official.
+        "ck-override-official-missing",
+        "exams/migrations/0012_sitting_candidate_number_and_override.py",
+        '("override_by__isnull", True), ("override_reason", "")',
+        '("override_by__isnull", True)',
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
