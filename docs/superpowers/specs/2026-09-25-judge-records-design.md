@@ -211,6 +211,11 @@ be capped at Category 3.
 
 ## Task order
 
+**Superseded by the plan**, `docs/superpowers/plans/2026-09-25-judge-records.md`, which has
+thirteen tasks: writing it found that `ComponentResult` carries no aspect, so finding `DA`
+and `DB` for the Difficulty mean would have been a lookup by frozen name — F2's shape. The
+aspect is now frozen onto items and results first. The list below is the design-time order.
+
 Part A — rules and their tables, independently shippable:
 
 1. `JudgeProfile` (nullable `user`) and `RosterEntry`
