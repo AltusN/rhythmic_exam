@@ -48,6 +48,7 @@ EXAMS_TESTS = [
     "tests/exams/test_cycles.py",
     "tests/exams/test_eligibility.py",
     "tests/exams/test_enrolment.py",
+    "tests/exams/test_awards.py",
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
@@ -906,6 +907,48 @@ MUTANTS = [
         "exams/marking.py",
         "                    aspect=group[0].component_aspect,\n",
         "",
+    ),
+    # --- judge records, Task 6 -------------------------------------------------
+    (
+        # F3's shape: as strings "Pass" >= "Good".
+        "awards-compare-grade-names",
+        "exams/awards.py",
+        "            _rank(achieved.grade, achieved.bands)\n"
+        "            >= _rank(requirements[category, dimension], achieved.bands)\n",
+        "            achieved.grade >= requirements[category, dimension]\n",
+    ),
+    (
+        # Grades 79.995 before quantizing: below the 80 edge where 80.00 is not.
+        "awards-difficulty-unquantized",
+        "exams/awards.py",
+        "difficulty = score_component([da.percentage, db.percentage])",
+        "difficulty = (da.percentage + db.percentage) / 2",
+    ),
+    (
+        "awards-difficulty-bands-unchecked",
+        "exams/awards.py",
+        "    if da.bands != db.bands:",
+        "    if False:",
+    ),
+    (
+        # Returns the worst category met instead of the best.
+        "awards-last-category-met",
+        "exams/awards.py",
+        "(Category.ONE, Category.TWO, Category.THREE, Category.FOUR)",
+        "(Category.FOUR, Category.THREE, Category.TWO, Category.ONE)",
+    ),
+    (
+        "awards-execution-reads-artistry",
+        "exams/awards.py",
+        'DimensionGrade(results["EX"].grade, results["EX"].bands)',
+        'DimensionGrade(results["AV"].grade, results["AV"].bands)',
+    ),
+    (
+        # A typo in the section 2.6 table ranks as Fail and is always met.
+        "awards-unknown-grade-ranks-lowest",
+        "exams/awards.py",
+        "    raise UnknownGrade(name)",
+        "    return 0",
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
