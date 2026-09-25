@@ -46,10 +46,15 @@ EXAMS_TESTS = [
     "tests/exams/test_results.py",
     "tests/exams/test_admin.py",
 ]
-# Only added to the fallback, never to a per-app scope: this is the one test that
-# catches model-versus-migration drift across every app, and the re-run against
-# "everything" should mean that.
-TEST_PATHS = EXAMS_TESTS + QUESTIONS_TESTS + ["tests/config/test_smoke.py"]
+ACCOUNTS_TESTS = [
+    "tests/accounts/test_models.py",
+]
+# The smoke test is only added to the fallback, never to a per-app scope: it is the
+# one test that catches model-versus-migration drift across every app, and the
+# re-run against "everything" should mean that.
+TEST_PATHS = (
+    EXAMS_TESTS + ACCOUNTS_TESTS + QUESTIONS_TESTS + ["tests/config/test_smoke.py"]
+)
 
 # Which tests can plausibly kill a mutant, by the app its target lives in. Scoping
 # is what makes the sweep quick: an exams mutant took 6.2s against everything and
@@ -60,7 +65,11 @@ TEST_PATHS = EXAMS_TESTS + QUESTIONS_TESTS + ["tests/config/test_smoke.py"]
 # verdict is not: the killing test may simply not have run. So a mutant that
 # survives its scope is re-run against everything before being reported, which
 # costs a full run only for the rare survivor.
-SCOPES = {"exams": EXAMS_TESTS, "questions": QUESTIONS_TESTS}
+SCOPES = {
+    "exams": EXAMS_TESTS,
+    "accounts": ACCOUNTS_TESTS,
+    "questions": QUESTIONS_TESTS,
+}
 
 
 def batches_for(relative_path: str) -> list[list[str]]:
@@ -680,6 +689,51 @@ MUTANTS = [
     # paper already marked -- the reason Sitting was locked down entirely.
     ("exams-admin-sitting-changeable", "exams/admin.py", *_allow(_SITTING, "change")),
     ("exams-admin-sitting-addable", "exams/admin.py", *_allow(_SITTING, "add")),
+    # --- judge records, Task 1 -------------------------------------------------
+    (
+        # The category import creates judges who have never signed in.
+        "accounts-judge-profile-user-required",
+        "accounts/migrations/0002_judge_profile_and_roster.py",
+        "models.OneToOneField(\n                        blank=True,\n                        null=True,\n",
+        "models.OneToOneField(\n                        blank=True,\n",
+    ),
+    (
+        # A ForeignKey drops the uniqueness a OneToOneField carries: one login could
+        # then be bound to two judges' histories.
+        "accounts-judge-profile-user-not-unique",
+        "accounts/migrations/0002_judge_profile_and_roster.py",
+        "models.OneToOneField(\n                        blank=True,",
+        "models.ForeignKey(\n                        blank=True,",
+    ),
+    (
+        # The plausible "fix" for a nullable one-to-one: NULLS NOT DISTINCT makes the
+        # second unlinked judge collide with the first. Only the two-profiles test
+        # sees it -- the single-profile test passes either way. This is the mutant
+        # that earns that test its place.
+        "accounts-judge-profile-nulls-not-distinct",
+        "accounts/migrations/0002_judge_profile_and_roster.py",
+        '"ordering": ["sagf_id"],\n',
+        '"ordering": ["sagf_id"],\n"constraints": [models.UniqueConstraint('
+        'fields=("user",), nulls_distinct=False, name="mutant")],\n',
+    ),
+    (
+        "accounts-roster-no-unique-sagf-year",
+        "accounts/migrations/0002_judge_profile_and_roster.py",
+        '                "constraints": [\n'
+        "                    models.UniqueConstraint(\n"
+        '                        fields=("sagf_id", "year"),\n'
+        '                        name="uq_one_roster_entry_per_judge_per_year",\n'
+        "                    )\n"
+        "                ],\n",
+        '                "constraints": [],\n',
+    ),
+    (
+        # Plan 2 matches Google's verified address against this column.
+        "accounts-roster-email-not-lowered",
+        "accounts/models.py",
+        "        self.email = self.email.lower()\n",
+        "",
+    ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
 ]
@@ -729,14 +783,26 @@ def run_tests(paths: list[str], *, fresh_database: bool) -> int:
 
 
 def main() -> int:
+    # `mutation_sweep.py name ...` runs only the named mutants -- for a review gate,
+    # where the new entries are what is in question. The end-of-task run is still
+    # the bare command, because only that one can show an OLD mutant surviving.
+    selected = set(sys.argv[1:])
+    unknown = selected - {name for name, *_ in MUTANTS}
+    if unknown:
+        print(f"no such mutant: {', '.join(sorted(unknown))}")
+        return 2
     survived, unapplied = [], []
+    ran = 0
     for name, relative_path, before, after in MUTANTS:
+        if selected and name not in selected:
+            continue
         source = RHYTHMIC / relative_path
         original = source.read_text()
         if before not in original:
             unapplied.append(name)
             print(f"{'UNAPPLIED':9s} {name:34s} pattern not found")
             continue
+        ran += 1
         try:
             source.write_text(original.replace(before, after, 1))
             fresh = "migrations" in relative_path
@@ -763,9 +829,7 @@ def main() -> int:
     if dirty:
         print(f"\nWARNING: working tree is not clean after the sweep:\n{dirty}")
 
-    print(
-        f"\nkilled={len(MUTANTS) - len(survived) - len(unapplied)} survived={len(survived)}"
-    )
+    print(f"\nkilled={ran - len(survived)} survived={len(survived)}")
     for name in survived:
         print(f"  SURVIVED  {name}")
     return 1 if survived else 0
