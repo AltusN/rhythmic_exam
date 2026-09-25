@@ -44,6 +44,7 @@ EXAMS_TESTS = [
     "tests/exams/test_freeze.py",
     "tests/exams/test_marking.py",
     "tests/exams/test_results.py",
+    "tests/exams/test_admin.py",
 ]
 # Only added to the fallback, never to a per-app scope: this is the one test that
 # catches model-versus-migration drift across every app, and the re-run against
@@ -100,6 +101,36 @@ def batches_for(relative_path: str) -> list[list[str]]:
     already_run = {path for batch in batches for path in batch}
     return [*batches, [path for path in TEST_PATHS if path not in already_run]]
 
+
+_PERMISSIONS = {
+    "change": "def has_change_permission(self, request, obj=None):",
+    "add": "def has_add_permission(self, request):",
+    "delete": "def has_delete_permission(self, request, obj=None):",
+}
+
+
+def _allow(comment: str, permission: str) -> tuple[str, str]:
+    """Flip one `return False` guard in `exams/admin.py` to `return True`.
+
+    The three read-only admins carry word-for-word identical guard methods, and
+    `main` replaces only the FIRST match -- so a bare method pattern would always
+    mutate SittingItemAdmin. Each class's comment line is the unique anchor; the
+    pattern runs from it down to the targeted method, in the order the file
+    declares them (change, add, delete).
+    """
+    order = list(_PERMISSIONS)
+    methods = [
+        f"    {_PERMISSIONS[name]}\n        return False\n"
+        for name in order[: order.index(permission) + 1]
+    ]
+    before = f"    # {comment}\n" + "\n".join(methods)
+    cut = before.rindex("False")
+    return before, before[:cut] + "True" + before[cut + len("False") :]
+
+
+_SITTING_ITEM = "frozen at the sitting's start: an audit trail, not an editable record"
+_COMPONENT_RESULT = "written once at submission: an audit trail, not an editable record"
+_SITTING = "progresses only through start_sitting/submit_sitting, never a raw edit"
 
 # (name, file, text to find, text to put in its place)
 #
@@ -582,6 +613,75 @@ MUTANTS = [
         'ordering = ["component_position", "pk"]',
         'ordering = ["component_name"]',
     ),
+    (
+        # Nothing but the changelist test reaches ExamAdmin, so unregistering it is
+        # the one way the exam admin can vanish that a test sees as a 404.
+        "exams-admin-unregister-exam",
+        "exams/admin.py",
+        "@admin.register(Exam)\nclass ExamAdmin",
+        "class ExamAdmin",
+    ),
+    (
+        # Survived all eleven admin tests on 2026-09-25 before the change-page GET:
+        # nothing rendered or posted the exam page. Killed by components-TOTAL_FORMS.
+        "exams-admin-drop-component-inline",
+        "exams/admin.py",
+        "inlines = [ExamComponentInline]",
+        "inlines = []",
+    ),
+    (
+        # The inline the plan was missing until 2026-09-19. Without it an official
+        # can author only the theory half, which decides nothing.
+        "exams-admin-drop-practical-inline",
+        "exams/admin.py",
+        "        ComponentPracticalItemInline,\n",
+        "",
+    ),
+    (
+        # A plain ModelAdmin still has a history page -- Django's own admin log --
+        # so the URL resolves. Only asserting the OLD status tells them apart.
+        "exams-admin-sitting-plain-modeladmin",
+        "exams/admin.py",
+        "class SittingAdmin(SimpleHistoryAdmin):",
+        "class SittingAdmin(admin.ModelAdmin):",
+    ),
+    # The nine read-only guards, each flipped to True in turn. Change is killed by
+    # asserting on the reloaded row, never the status code; delete by exists() after
+    # POSTing {"post": "yes"}; add by a GET returning 403, which is sufficient there
+    # because add_view refuses before any form exists. All three add guards and
+    # the Sitting delete guard survived until 2026-09-25's last two tests.
+    (
+        "exams-admin-sittingitem-changeable",
+        "exams/admin.py",
+        *_allow(_SITTING_ITEM, "change"),
+    ),
+    (
+        "exams-admin-sittingitem-addable",
+        "exams/admin.py",
+        *_allow(_SITTING_ITEM, "add"),
+    ),
+    (
+        "exams-admin-sittingitem-deletable",
+        "exams/admin.py",
+        *_allow(_SITTING_ITEM, "delete"),
+    ),
+    (
+        "exams-admin-result-changeable",
+        "exams/admin.py",
+        *_allow(_COMPONENT_RESULT, "change"),
+    ),
+    ("exams-admin-result-addable", "exams/admin.py", *_allow(_COMPONENT_RESULT, "add")),
+    (
+        "exams-admin-result-deletable",
+        "exams/admin.py",
+        *_allow(_COMPONENT_RESULT, "delete"),
+    ),
+    # Reopening a SUBMITTED sitting would let record_response accept answers into a
+    # paper already marked -- the reason Sitting was locked down entirely.
+    ("exams-admin-sitting-changeable", "exams/admin.py", *_allow(_SITTING, "change")),
+    ("exams-admin-sitting-addable", "exams/admin.py", *_allow(_SITTING, "add")),
+    # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
+    ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
 ]
 
 HISTORY_TAILS = {
