@@ -1141,13 +1141,34 @@ never binds. A `200` from an admin POST means the form re-rendered — it failed
 
 - [ ] **Step 3: Register the sitting models read-only**
 
-`SimpleHistoryAdmin` on `Sitting`. `has_add_permission` and `has_change_permission` returning
-`False` on `SittingItem` and `ComponentResult`; `readonly_fields` naming every field.
+`has_add_permission`, `has_change_permission` and `has_delete_permission` returning
+`False` on **all three** — `Sitting`, `SittingItem` and `ComponentResult`. `Sitting` keeps
+`SimpleHistoryAdmin` as its base, so the history page stays reachable.
 
-**"Every field" has grown since this was written.** `SittingItem` gained `grade_bands`
-in Task 9 and `ComponentResult` carries `component_position`, which the plan's own
-field list for it does not mention. A `readonly_fields` that misses one leaves exactly
-that field editable on a frozen row, and nothing in Django objects.
+**Permissions, not `readonly_fields`** (changed 2026-09-25). This step originally asked
+for `readonly_fields` naming every field, with a note that the list had already gone
+stale — `SittingItem` gained `grade_bands` in Task 9, and `ComponentResult` carries a
+`component_position` the plan never listed. That is the weakness of an allow-list: a
+field added later is editable by default and nothing objects. `has_change_permission`
+returning `False` puts the admin in view-only mode, which covers every field present and
+future. It is exhaustive by construction rather than by upkeep.
+
+**`Sitting` is locked down entirely** (decided 2026-09-25). Until then this step gave it a
+plain `SimpleHistoryAdmin`, which inherits every default permission — contradicting the
+task's own opening line, which lists `Sitting` among the records "never editable".
+
+*Derived, and why it matters:* an official could set a `SUBMITTED` sitting's `status`
+back to `IN_PROGRESS`. `record_response` reads the status off the locked row, which is
+correct, and would then accept new responses into a paper that had already been marked,
+with its `ComponentResult` rows standing unchanged beside them. The Task 8 guard is
+sound; it trusts a field the admin could rewrite.
+
+The cost is that `certified_by`, `certified_at` and `outcome` cannot be set through the
+admin either. That is deliberate. Certification is a separate event recorded by a
+different person against history the exam has never seen, and open question 2 leaves
+its policy unresolved — **it belongs to the accounts plan, as its own action**, not to a
+change form that also happens to expose `status`. Unlocking only those three fields
+here would be inventing the certification workflow by accident.
 
 The tests, for reference from Step 1:
 
@@ -1158,6 +1179,9 @@ The tests, for reference from Step 1:
 | `test_the_sitting_history_page_shows_the_previous_status` | assert on the **old** value; the current one is chrome, because `__str__` renders in the page title |
 | `test_admin_pages_require_login` | parametrized over the changelist URL names, no `django_db` marker |
 | `test_a_practical_component_takes_members_through_the_admin` | **added 2026-09-19 with the inline above.** POST to the component change URL with the `practical_item_members` formset filled, then assert the `ComponentPracticalItem` row exists. Without it the inline is dark code: a mutant dropping it from `inlines` survives every other test here, since nothing else renders or posts that formset. Follow `tests/questions/test_admin.py`'s saving test for the four management-form keys, and remember a `200` from an admin POST means the form re-rendered — it failed |
+| `test_a_component_result_cannot_be_deleted_through_the_admin` | **added 2026-09-25.** Mirror the `SittingItem` delete test — POST `{"post": "yes"}` to the delete URL, assert the row still exists. Or parametrize one delete test over both models. Mutant `ComponentResult` deletable survived all eleven tests without it |
+| `test_a_sitting_cannot_be_changed_through_the_admin` | **added 2026-09-25 with the lock-down above.** Start and submit a sitting, POST `status=IN_PROGRESS` to its change URL, reload, assert it is still `SUBMITTED`. Assert on the reloaded row, never the status code |
+| an exam-page inline test | **added 2026-09-25.** Mutant `ExamAdmin` loses `ExamComponentInline` survived all eleven — nothing renders or posts the exam change page. Either GET it and assert `components-TOTAL_FORMS` is present, absent-first, or POST a component through it the way the practical-member test does |
 
 The second test's assertion must be on the **data**, not the status code. A read-only admin
 that returns 302 and saves anyway is exactly the failure it exists to catch.
