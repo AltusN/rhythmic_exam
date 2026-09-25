@@ -95,3 +95,66 @@ def examination_category(
         ):
             return category
     return Category.FAIL
+
+
+# Section 2.6: "Category 1 can drop at worst to Category 3, Category 2 can drop at
+# worst to Category 4."
+DROP_LIMIT = 2
+FIRST_CYCLE_CAP = Category.THREE
+
+
+@dataclass(frozen=True)
+class PriorCertification:
+    cycle_first_year: int
+    category: Category
+
+
+@dataclass(frozen=True)
+class Bounds:
+    floor: Category | None
+    cap: Category | None
+    suggested: Category
+
+
+def award_bounds(
+    *,
+    examination: Category,
+    history: Sequence[PriorCertification],
+    cycle_first_year: int,
+    previous_cycle_first_year: int | None,
+) -> Bounds:
+    """The bounds section 2.6 sets on the awarded category, from this system's own
+    records, and the examination category held within them.
+
+    `history` is the judge's other certifications, imported or examined, IN THE
+    ORDER THEY WERE RECORDED: the previous cycle's category is its last one, not
+    its best (section 2.7, "The retest result will be valid and final").
+
+    The cap and the floor can never both apply -- the cap needs no certification in
+    any earlier cycle and the floor needs one in the previous cycle -- so nothing
+    here decides which wins. Judging experience is not modelled; the official
+    applies it, and the certification's reason records how.
+    """
+    first_cycle = not any(
+        prior.cycle_first_year < cycle_first_year for prior in history
+    )
+    cap = FIRST_CYCLE_CAP if first_cycle else None
+
+    previous = [
+        prior.category
+        for prior in history
+        if prior.cycle_first_year == previous_cycle_first_year
+    ]
+    floor = None
+    # No floor when the previous category was 3 or worse (3 + 2 names no category)
+    # or when the previous cycle holds nothing -- section 2.8's interruption.
+    if previous and previous[-1] + DROP_LIMIT <= Category.FOUR:
+        floor = Category(previous[-1] + DROP_LIMIT)
+
+    # Worse is numerically greater: the cap raises the number, the floor lowers it.
+    suggested = examination
+    if cap is not None:
+        suggested = Category(max(suggested, cap))
+    if floor is not None:
+        suggested = Category(min(suggested, floor))
+    return Bounds(floor=floor, cap=cap, suggested=suggested)

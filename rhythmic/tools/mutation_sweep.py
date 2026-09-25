@@ -950,6 +950,68 @@ MUTANTS = [
         "    raise UnknownGrade(name)",
         "    return 0",
     ),
+    # --- judge records, Task 7 -------------------------------------------------
+    (
+        # The original spec's formula: the drop limit treated as another cap. A
+        # previous Category 1 examined at 4 is awarded 4 instead of 3.
+        "bounds-floor-as-cap",
+        "exams/awards.py",
+        "suggested = Category(min(suggested, floor))",
+        "suggested = Category(max(suggested, floor))",
+    ),
+    (
+        "bounds-floor-replaces-result",
+        "exams/awards.py",
+        "suggested = Category(min(suggested, floor))",
+        "suggested = floor",
+    ),
+    (
+        "bounds-cap-replaces-result",
+        "exams/awards.py",
+        "suggested = Category(max(suggested, cap))",
+        "suggested = cap",
+    ),
+    (
+        "bounds-drop-limit-one",
+        "exams/awards.py",
+        "DROP_LIMIT = 2",
+        "DROP_LIMIT = 1",
+    ),
+    (
+        # Category 2's floor of 4 disappears.
+        "bounds-floor-edge-exclusive",
+        "exams/awards.py",
+        "previous[-1] + DROP_LIMIT <= Category.FOUR",
+        "previous[-1] + DROP_LIMIT < Category.FOUR",
+    ),
+    (
+        # Best rather than latest: a worse retest would not replace the result.
+        "bounds-floor-from-best",
+        "exams/awards.py",
+        "    floor = None\n",
+        "    floor = None\n    previous = sorted(previous, reverse=True)\n",
+    ),
+    (
+        # Any earlier cycle, not the previous one: no interruption rule.
+        "bounds-floor-from-any-earlier-cycle",
+        "exams/awards.py",
+        "if prior.cycle_first_year == previous_cycle_first_year",
+        "if prior.cycle_first_year < cycle_first_year",
+    ),
+    (
+        # A retest's own first attempt would lift the first-cycle cap.
+        "bounds-this-cycle-counts-as-earlier",
+        "exams/awards.py",
+        "prior.cycle_first_year < cycle_first_year for prior in history",
+        "prior.cycle_first_year <= cycle_first_year for prior in history",
+    ),
+    (
+        # FAIL would compare as better than Category 1.
+        "category-fail-zero",
+        "exams/awards.py",
+        "    FAIL = 5",
+        "    FAIL = 0",
+    ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
 ]

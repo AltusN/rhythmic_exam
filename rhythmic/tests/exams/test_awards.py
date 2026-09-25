@@ -1,3 +1,4 @@
+import itertools
 from decimal import Decimal
 
 import pytest
@@ -5,9 +6,12 @@ import pytest
 from exams.awards import (
     AspectResult,
     BandsDisagree,
+    Bounds,
     Category,
     DimensionGrade,
+    PriorCertification,
     UnknownGrade,
+    award_bounds,
     dimension_grades,
     examination_category,
 )
@@ -143,3 +147,122 @@ def test_an_unknown_minimum_grade_raises():
         examination_category(
             _dimensions("Excellent", "Very Good", "Very Good"), requirements
         )
+
+
+# --- award bounds ---------------------------------------------------------------
+
+THIS_CYCLE, PREVIOUS_CYCLE, OLDER_CYCLE = 2025, 2021, 2017
+
+
+def _bounds(examination, *history):
+    return award_bounds(
+        examination=examination,
+        history=[PriorCertification(year, category) for year, category in history],
+        cycle_first_year=THIS_CYCLE,
+        previous_cycle_first_year=PREVIOUS_CYCLE,
+    )
+
+
+@pytest.mark.parametrize(
+    ("examination", "history", "expected"),
+    [
+        # "A first time Brevet can achieve a maximum of Category 3."
+        (
+            Category.ONE,
+            [],
+            Bounds(floor=None, cap=Category.THREE, suggested=Category.THREE),
+        ),
+        # The cap bounds from above only: it never improves a result.
+        (
+            Category.FOUR,
+            [],
+            Bounds(floor=None, cap=Category.THREE, suggested=Category.FOUR),
+        ),
+        # Imported history counts: this judge is not a first-time brevet.
+        (
+            Category.ONE,
+            [(PREVIOUS_CYCLE, Category.TWO)],
+            Bounds(floor=Category.FOUR, cap=None, suggested=Category.ONE),
+        ),
+        # "Category 1 can drop at worst to Category 3" -- the case the original
+        # spec's min(...) got wrong, by treating the floor as another cap.
+        (
+            Category.FOUR,
+            [(PREVIOUS_CYCLE, Category.ONE)],
+            Bounds(floor=Category.THREE, cap=None, suggested=Category.THREE),
+        ),
+        # "In case of passing or failure results": the floor holds on a fail.
+        (
+            Category.FAIL,
+            [(PREVIOUS_CYCLE, Category.TWO)],
+            Bounds(floor=Category.FOUR, cap=None, suggested=Category.FOUR),
+        ),
+        # 3 + 2 names no category, so a previous Category 3 may fall to FAIL.
+        (
+            Category.FAIL,
+            [(PREVIOUS_CYCLE, Category.THREE)],
+            Bounds(floor=None, cap=None, suggested=Category.FAIL),
+        ),
+        # Section 2.8: nothing in the previous cycle is an interruption, no floor.
+        (
+            Category.FAIL,
+            [(OLDER_CYCLE, Category.ONE)],
+            Bounds(floor=None, cap=None, suggested=Category.FAIL),
+        ),
+        # Latest, not best: section 2.7's "valid and final". The Category 3 retest
+        # replaced the Category 1, and a previous 3 has no floor.
+        (
+            Category.FAIL,
+            [(PREVIOUS_CYCLE, Category.ONE), (PREVIOUS_CYCLE, Category.THREE)],
+            Bounds(floor=None, cap=None, suggested=Category.FAIL),
+        ),
+        # A certification from THIS cycle -- a retest's first attempt -- is not an
+        # earlier cycle, so the judge is still in their first.
+        (
+            Category.ONE,
+            [(THIS_CYCLE, Category.TWO)],
+            Bounds(floor=None, cap=Category.THREE, suggested=Category.THREE),
+        ),
+    ],
+    ids=[
+        "first-cycle-cap",
+        "cap-never-improves",
+        "imported-history-lifts-the-cap",
+        "floor-on-pass",
+        "floor-on-fail",
+        "no-floor-from-category-3",
+        "no-floor-after-interruption",
+        "latest-not-best-in-the-previous-cycle",
+        "this-cycle-is-not-earlier",
+    ],
+)
+def test_award_bounds(examination, history, expected):
+    assert _bounds(examination, *history) == expected
+
+
+def test_the_floor_never_lowers_a_result():
+    # A former Category 2 examined at Category 1 keeps the 1: the floor bounds from
+    # below only.
+    assert (
+        _bounds(Category.ONE, (PREVIOUS_CYCLE, Category.TWO)).suggested is Category.ONE
+    )
+
+
+def test_floor_and_cap_never_coexist():
+    # The cap needs no certification in any earlier cycle; the floor needs one in
+    # the previous cycle. Checked over every examination result and every history
+    # shape rather than argued, because the design leans on it: nothing decides
+    # which would win.
+    shapes = {
+        "none": [],
+        "previous only": [(PREVIOUS_CYCLE, Category.ONE)],
+        "older only": [(OLDER_CYCLE, Category.ONE)],
+        "this cycle only": [(THIS_CYCLE, Category.ONE)],
+        "previous and older": [
+            (OLDER_CYCLE, Category.TWO),
+            (PREVIOUS_CYCLE, Category.ONE),
+        ],
+    }
+    for examination, (shape, history) in itertools.product(Category, shapes.items()):
+        bounds = _bounds(examination, *history)
+        assert bounds.floor is None or bounds.cap is None, (examination, shape)
