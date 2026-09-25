@@ -369,6 +369,9 @@ a disputed result defensible.
 
 ### Eligibility
 
+> **Amended 2026-09-25** by `2026-09-25-judge-records-design.md`: eligibility no longer consults certification history. Level chooses the paper; category is the award, and history feeds the award's bounds instead.
+
+
 A judge never edits their own level. "Level" today conflates two different things:
 
 | | Meaning | Controlled by |
@@ -388,6 +391,9 @@ one.
 ## Domain model
 
 ### Accounts
+
+> **Amended 2026-09-25** by `2026-09-25-judge-records-design.md`: `Certification` records a **category** (1–4 or fail), not a level; it lives in `exams`, and its `judge` points at `JudgeProfile`.
+
 
 ```
 User                 Django user. Identity from Google. No password.
@@ -650,6 +656,9 @@ again.
 their mean — see `CLAUDE.md`, decided 2026-08-08.
 
 ### The examination result is an upper bound, not the award
+
+> **Amended 2026-09-25** by `2026-09-25-judge-records-design.md`: the `min(…)` formula below is wrong. The drop limit is a **floor**, not a cap — a previous Category 1 judge examined at Category 4 is awarded Category 3.
+
 
 This is the part that changes the design, and it is why scoring and certification are
 separate events in this system.
