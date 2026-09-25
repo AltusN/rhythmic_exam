@@ -9,8 +9,7 @@ disagree; the corrections are listed at the end and noted in that spec as well.
 
 ## Source
 
-FIG General Judges' Rules 2025–2028, chapter 2, read 2026-09-25 (`specs/en_1.2 - General
-Judges' Rules 2025-2028 (Mark-up).pdf`, a public FIG document). **SAGF runs a national
+FIG General Judges' Rules 2025–2028, chapter 2, read 2026-09-25 (`https://www.gymnastics.sport/publicdir/rules/files/en_1.2%20-%20General%20Judges'%20Rules%202025-2028%20(Mark-up).pdf`, a public FIG document). **SAGF runs a national
 copy of the FIG brevet** (confirmed by Altus, 2026-09-25): it awards Categories 1–4 itself,
 capped the way FIG caps them, and adopts these four chapter-2 procedures —
 
