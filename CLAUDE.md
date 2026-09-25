@@ -188,6 +188,14 @@ demonstrably not a reliable trigger:
 chores (moving files, deleting things), generated migrations, and reviewing or
 debugging code he has already written.
 
+**One deliberate exception so far: Part A of the judge-records plan** (2026-09-25,
+`172ec4a`…`7362203`). Altus asked to watch Claude do a stretch of work end to end and
+chose that Claude write and commit all seven tasks, tests first, each shown red. It
+was his decision, asked for explicitly, and it **does not change the default** — Part B
+goes back to him writing. Read those commits as Claude's, which matters when judging
+what he has and has not yet written himself: the eligibility rule, `awards.py` and
+`enrol` are not code he typed.
+
 **`CLAUDE.md`, the specs and the plans are yours to commit** (agreed 2026-08-08,
 extended to plans 2026-08-10). Write and commit anything under
 `docs/superpowers/{specs,plans}/` and this file directly — no need to hand the commit
@@ -653,8 +661,29 @@ reloaded row, because a change POST can 302 without saving.
 at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
 the two-exam split and the dated exam.
 
-**Next action: the accounts and roster plan** — which also owns certification. Then
-the React island last.
+**Next action: Part B of the judge-records plan**,
+`docs/superpowers/plans/2026-09-25-judge-records.md`, Task 8 — `Certification` and its
+constraints. Part A (Tasks 1–7) landed 2026-09-25, written by Claude at Altus's request
+(see "One deliberate exception" above): `JudgeProfile` and `RosterEntry` in `accounts`;
+`Cycle` and `CategoryRequirement` as rows; the pure eligibility rule and `enrol`, with a
+random `candidate_number` and a recorded override; the component aspect frozen onto items
+and results; and `exams/awards.py`, the §2.6 examination category and the award bounds.
+Plan 2 (sign-in) follows, then the React island last.
+
+**A data assertion on an admin POST goes vacuous when the model gains a required
+field** (2026-09-25). `test_a_sitting_cannot_be_changed_through_the_admin` asserted only
+that the row was unchanged. Task 4 added a required `candidate_number` the payload
+lacked, so with the lock removed the form failed validation, re-rendered with 200, and
+left the row unchanged anyway — green against an editable admin, found only by the full
+sweep. It now also asserts **403**, the one response only the permission produces.
+"Assert the data, not the status" still holds for a 302, which can save; it was never a
+reason to ignore the one status that cannot be faked.
+
+**Two things Part A found that the plan did not.** `test_roster_levels_round_trip` was
+dropped: it asserted that a Postgres array keeps its order, which no mutant of this code
+can break. And `enrol` needed two tests the plan omitted — the open-sitting check and
+the submitted-sitting retake — because the pure rule's tests exercise the boolean, never
+the query that computes it.
 
 **Grade bands are frozen onto the item as well** (decided 2026-09-13). Grading needs
 bands, `SittingItem` holds no component to ask, and a lookup by frozen
@@ -732,7 +761,10 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, 2026-09-25, after Task 10 and the `list_filter` test: **77 mutants, 77
+Latest run, 2026-09-25, after Part A of the judge-records plan: **121 mutants, 121
+killed, 0 survived** in 9m44s — after the drift-test and bytecode fixes, both in the
+`mutation-sweep` skill. The run before it, after Task 10 and the `list_filter` test, was
+**77 mutants, 77
 killed, 0 survived** — the first clean sweep since that mutant entered the catalogue.
 Treat any SURVIVED line as a stop from now on; there is no standing exception left to
 skim past. The thirteen `exams/admin.py` mutants' nine permission flips anchor on each

@@ -86,6 +86,37 @@ ordering anywhere. A KILLED from that test means "you forgot `makemigrations`", 
 leaves an empty `class Meta:` and the file will not import, which is unfalsifiable in
 both directions.
 
+## Migration mutants run without the drift test
+
+Fixed 2026-09-25 (`e2a4da0`). A migration mutant makes the migration disagree with the
+model **by construction**, so `test_dry_run_makemigrations` killed every one of them in
+the fallback batch — the note above says such a KILLED means "makemigrations was not
+run", but the sweep counted it as a kill regardless. A weakened unique key on
+`candidate_number` survived all of `tests/exams/` and was still reported KILLED.
+
+`run_tests` now excludes the drift test for migration mutants, **by name through `-k`**.
+`--deselect` was tried first and deselected nothing, silently: it takes a node ID, node
+IDs are relative to the rootdir, and the rootdir is the repository root because that is
+where `pytest.ini` lives — so `tests/config/...` matched no item. After the fix all 21
+earlier migration mutants were still killed by real tests; only the new one survived.
+
+`mutation_sweep.py name ...` runs only the named mutants — for review gates. The bare
+command is still the end-of-task run, because only it can show an old mutant surviving.
+
+## A mutant can outlive its own restore, through bytecode
+
+Fixed 2026-09-25 (`ef4e905`). A `.pyc` is trusted when the source's size and mtime —
+to the **second** — match what it recorded. `FAIL = 5` → `FAIL = 0` changes no size; the
+sweep wrote it, pytest cached the mutant's bytecode, the sweep restored the original
+inside the same second, and the next ordinary `pytest` run executed the mutant. It showed
+up as one inexplicable failure with the correct value on disk.
+
+The mirror case is the dangerous one: a same-length mutant written within the second of
+a cached *original* runs the original, and reports **SURVIVED having never run**.
+`write_source` now deletes the file's cached bytecode on every mutant write and every
+restore. **If a suite fails right after a sweep with a value the source does not
+contain, suspect bytecode before code** — `find … -name __pycache__ -exec rm -rf {} +`.
+
 ## Some tests have no mutant, and that is worth knowing rather than hunting
 
 Two from Task 6:
