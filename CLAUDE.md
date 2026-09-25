@@ -572,8 +572,9 @@ says nothing whatever about commit messages; don't mistake one for the other.
 
 ## Current state
 
-**Three plans finished: the scoring package (seven tasks), the Django skeleton
-(five) and the questions app (nine).** As of 2026-08-30 the suite passes and both
+**Four plans finished: the scoring package (seven tasks), the Django skeleton
+(five), the questions app (nine) and exams-and-sittings (ten, closed 2026-09-25 at
+`b8d7b6b`).** As of 2026-09-25 the suite passes — 216 tests and both
 `ruff check .` and `ruff format --check .` are clean. Run all three from `rhythmic/`.
 
 **Postgres must be running for the full suite to pass.** `docker compose up -d` from
@@ -622,8 +623,38 @@ percentage and one grade per component, written once at submission. `score_compo
 takes the mean of per-item percentages, so legacy's magic 20 has nowhere to hide. Two
 mutants pin it: the bare sum, and a divisor hard-coded to the item count — the second
 is invisible at five items, which is why the F5 test insists on six and asserts the
-item count before anything else. **Next action is Task 10, admin and the backfill.**
-Then accounts and the roster, then the React island last.
+item count before anything else.
+
+**Task 10 landed, `b8d7b6b`, and closes the plan.** The definition models are edited
+through the admin with inlines, including the practical membership inline the plan
+was missing until 2026-09-19. `Sitting`, `SittingItem` and `ComponentResult` are
+records: all three return `False` from `has_add_permission`, `has_change_permission`
+and `has_delete_permission`. **Permissions, not `readonly_fields`** — view-only mode
+covers a field added later, and an allow-list had already gone stale twice.
+
+**`Sitting` is locked down entirely** (decided 2026-09-25). The plan had given it a
+plain `SimpleHistoryAdmin`, which inherits every permission, so an official could set a
+`SUBMITTED` sitting back to `IN_PROGRESS` and `record_response` would accept answers
+into a paper already marked. The cost is that `certified_by`/`certified_at`/`outcome`
+cannot be set in the admin either — **certification belongs to the accounts plan as its
+own action**, not to a change form that also exposes `status`.
+
+**The review mutants found four guards no test reached** — add on all three models and
+delete on `Sitting` — plus the exam page's component inline. Every one was written
+correctly and none was executed: the guard-clause lesson from Task 9 again, at the
+admin layer. Deleting a `Sitting` was the worst, since both FKs into it `CASCADE`. An
+add guard is pinned by a GET returning 403, which is sufficient there because
+`add_view` refuses before any form exists; a change guard is pinned only by the
+reloaded row, because a change POST can 302 without saving.
+
+**Findings closed by this plan:** F1 and F2 at the freeze
+(`test_the_mark_uses_the_table_frozen_at_start_of_sitting`,
+`test_the_grade_uses_the_bands_frozen_at_start_of_sitting`), F3 and F4 at marking, F5
+at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
+the two-exam split and the dated exam.
+
+**Next action: the accounts and roster plan** — which also owns certification. Then
+the React island last.
 
 **Grade bands are frozen onto the item as well** (decided 2026-09-13). Grading needs
 bands, `SittingItem` holds no component to ask, and a lookup by frozen
@@ -701,9 +732,12 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 9, 2026-09-17: **64 mutants, 63 killed, 1 survived** in 205s
-— the survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
-of scope and which has now survived eleven consecutive runs. **It was the largest
+Latest run, after Task 10, 2026-09-25: **77 mutants, 76 killed, 1 survived** in 266s
+— the thirteen new ones are `exams/admin.py`'s, and the nine permission flips anchor on
+each class's comment line because the guard methods are identical and the sweep
+replaces only the first match; reword a comment and its mutants report `UNAPPLIED`. The
+survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
+of scope and which has now survived twelve consecutive runs. **It was the largest
 single item at 11.5s when the run was last measured, on 2026-09-12**; the run has since
 nearly doubled, most likely because `tests/exams/test_results.py` entered both the
 exams scope and `TEST_PATHS` and every test in it freezes and marks a sitting — that
