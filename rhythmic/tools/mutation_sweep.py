@@ -46,6 +46,7 @@ EXAMS_TESTS = [
     "tests/exams/test_results.py",
     "tests/exams/test_admin.py",
     "tests/exams/test_cycles.py",
+    "tests/exams/test_eligibility.py",
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
@@ -779,6 +780,40 @@ MUTANTS = [
         "exams/migrations/0011_cycles_and_category_requirements.py",
         '("dimension__in", ["DIFFICULTY", "EXECUTION", "ARTISTRY"])',
         '("dimension__in", ["DIFFICULTY", "EXECUTION", "ARTISTRY", "BALANCE"])',
+    ),
+    # --- judge records, Task 3 -------------------------------------------------
+    (
+        # Allows a second retest.
+        "eligibility-retest-exclusive",
+        "exams/eligibility.py",
+        "prior_practical_sittings >= PRACTICAL_SITTINGS_PER_CYCLE",
+        "prior_practical_sittings > PRACTICAL_SITTINGS_PER_CYCLE",
+    ),
+    (
+        # Refuses the one retest section 2.7 allows.
+        "eligibility-no-retest",
+        "exams/eligibility.py",
+        "PRACTICAL_SITTINGS_PER_CYCLE = 2",
+        "PRACTICAL_SITTINGS_PER_CYCLE = 1",
+    ),
+    (
+        "eligibility-theory-retest-limited",
+        "exams/eligibility.py",
+        "if exam_is_practical and prior_practical_sittings",
+        "if prior_practical_sittings",
+    ),
+    (
+        # Conflates "no roster entry" with "an entry permitting nothing".
+        "eligibility-roster-truthiness",
+        "exams/eligibility.py",
+        "if roster_levels is None:",
+        "if not roster_levels:",
+    ),
+    (
+        "eligibility-first-refusal-only",
+        "exams/eligibility.py",
+        "        found.append(Refusal.NOT_ON_ROSTER)\n",
+        "        return [Refusal.NOT_ON_ROSTER]\n",
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
