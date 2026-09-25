@@ -732,18 +732,20 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 10, 2026-09-25: **77 mutants, 76 killed, 1 survived** in 266s
-— the thirteen new ones are `exams/admin.py`'s, and the nine permission flips anchor on
-each class's comment line because the guard methods are identical and the sweep
-replaces only the first match; reword a comment and its mutants report `UNAPPLIED`. The
-survivor is `list_filter` on aspect, which Task 8 of the questions plan declared out
-of scope and which has now survived twelve consecutive runs. **It was the largest
-single item at 11.5s when the run was last measured, on 2026-09-12**; the run has since
-nearly doubled, most likely because `tests/exams/test_results.py` entered both the
-exams scope and `TEST_PATHS` and every test in it freezes and marks a sitting — that
-attribution is reasoning, not a measurement. Either fix `list_filter` or drop the
-mutant, because a permanently red SURVIVED line trains you to skim the one line in
-the report that is meant to stop you. **How the sweep scopes its tests, which mutants
+Latest run, 2026-09-25, after Task 10 and the `list_filter` test: **77 mutants, 77
+killed, 0 survived** — the first clean sweep since that mutant entered the catalogue.
+Treat any SURVIVED line as a stop from now on; there is no standing exception left to
+skim past. The thirteen `exams/admin.py` mutants' nine permission flips anchor on each
+class's comment line, because the guard methods are identical and the sweep replaces
+only the first match; reword a comment and its mutants report `UNAPPLIED`.
+
+**`list_filter` survived twelve runs because the obvious test cannot kill it.** The
+admin's `lookup_allowed` accepts a lookup on any local field, so `?aspect=DB` filters
+the changelist with or without `list_filter` — measured, 1 row of 4 both ways. What the
+line adds is the sidebar, whose links read `?aspect__exact=DA`; the test asserts that
+string. Assert on what the code adds, not on the framework behaviour beside it. The
+run was 266s after Task 10, up from 205s — the thirteen admin mutants at 4-6s each.
+**How the sweep scopes its tests, which mutants
 need `--create-db`, where a claim actually lives and what `UNAPPLIED` means are in the
 `mutation-sweep` skill.**
 
