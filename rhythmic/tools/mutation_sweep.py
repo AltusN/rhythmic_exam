@@ -894,6 +894,19 @@ MUTANTS = [
         '("override_by__isnull", True), ("override_reason", "")',
         '("override_by__isnull", True)',
     ),
+    # --- judge records, Task 5 -------------------------------------------------
+    (
+        "freeze-drops-component-aspect",
+        "exams/freeze.py",
+        "                        component_aspect=component.aspect,\n",
+        "",
+    ),
+    (
+        "results-drop-aspect",
+        "exams/marking.py",
+        "                    aspect=group[0].component_aspect,\n",
+        "",
+    ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
 ]

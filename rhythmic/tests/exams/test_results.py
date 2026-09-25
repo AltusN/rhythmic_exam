@@ -402,3 +402,58 @@ def test_component_results_are_ordered_by_component_position(django_user_model):
         (2, "Component DB"),
         (3, "Component EX"),
     ]
+
+
+def _two_aspect_practical_sitting(django_user_model):
+    # Names that do not spell their aspect, so no assertion here can be satisfied by
+    # reading the name back -- the aspect has to have been copied.
+    judge = django_user_model.objects.create_user(username="judge", password="x")
+    exam = Exam.objects.create(kind=ExamKind.PRACTICAL, level=1, year=2026)
+    routine = Routine.objects.create(
+        apparatus=Apparatus.objects.create(name="Rope", position=1),
+        label="R1",
+        video="blocks/rope.mp4",
+    )
+    bands = (("Fail", Decimal("0.00")), ("Pass", Decimal("50.00")))
+    for position, (name, aspect) in enumerate(
+        (("First judging panel", Aspect.DA), ("Second judging panel", Aspect.EX)),
+        start=1,
+    ):
+        component = _practical_component(
+            exam=exam, name=name, position=position, aspect=aspect, bands=bands
+        )
+        ComponentPracticalItem.objects.create(
+            component=component,
+            practical_item=PracticalItem.objects.create(
+                routine=routine, aspect=aspect, expert_score=Decimal("8.50")
+            ),
+            position=1,
+        )
+    sitting = Sitting.objects.create(judge=judge, exam=exam)
+    start_sitting(sitting)
+    return sitting
+
+
+@pytest.mark.django_db
+def test_a_frozen_item_carries_its_component_aspect(django_user_model):
+    sitting = _two_aspect_practical_sitting(django_user_model)
+
+    assert list(sitting.items.values_list("component_name", "component_aspect")) == [
+        ("First judging panel", "DA"),
+        ("Second judging panel", "EX"),
+    ]
+
+
+@pytest.mark.django_db
+def test_a_component_result_carries_its_aspect(django_user_model):
+    # Certification finds DA and DB by this column. Finding them by the frozen name
+    # would be F2's shape: there is no unique constraint on a component's name.
+    sitting = _two_aspect_practical_sitting(django_user_model)
+    for item in sitting.items.all():
+        record_response(item=item, response="8.50")
+    submit_sitting(sitting=sitting)
+
+    assert list(sitting.results.values_list("component_name", "aspect")) == [
+        ("First judging panel", "DA"),
+        ("Second judging panel", "EX"),
+    ]

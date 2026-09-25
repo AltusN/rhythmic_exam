@@ -64,6 +64,7 @@ def submit_sitting(sitting: Sitting) -> None:
                     sitting=sitting,
                     component_name=component_name,
                     component_position=group[0].component_position,
+                    aspect=group[0].component_aspect,
                     percentage=percentage,
                     grade_name=grade(
                         percentage=percentage,

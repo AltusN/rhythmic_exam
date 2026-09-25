@@ -115,6 +115,7 @@ def start_sitting(sitting: Sitting) -> None:
                         sitting=sitting,
                         component_name=component.name,
                         component_position=component.position,
+                        component_aspect=component.aspect,
                         marking_scheme=component.marking_scheme,
                         grade_bands=bands_json,
                         position=next(positions),

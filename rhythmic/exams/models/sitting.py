@@ -80,6 +80,9 @@ class SittingItem(models.Model):
     sitting = models.ForeignKey(Sitting, on_delete=models.CASCADE, related_name="items")
     component_name = models.CharField(max_length=50)
     component_position = models.PositiveSmallIntegerField()
+    # Copied like the name: certification finds DA and DB by aspect, and a lookup by
+    # frozen name is F2's shape. "" for a theory component.
+    component_aspect = models.CharField(max_length=2, blank=True, default="")
     marking_scheme = models.CharField(max_length=7)
     position = models.PositiveSmallIntegerField()
     question_snapshot = models.JSONField()
@@ -106,6 +109,7 @@ class ComponentResult(models.Model):
     )
     component_name = models.CharField(max_length=50)
     component_position = models.PositiveSmallIntegerField()
+    aspect = models.CharField(max_length=2, blank=True, default="")
     percentage = models.DecimalField(max_digits=5, decimal_places=2)
     grade_name = models.CharField(max_length=50)
 
