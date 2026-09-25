@@ -1,4 +1,7 @@
 from exams.models.definition import (
+    CategoryRequirement,
+    Cycle,
+    Dimension,
     Exam,
     ExamComponent,
     ExamKind,
@@ -13,6 +16,9 @@ from exams.models.membership import (
 from exams.models.sitting import ComponentResult, Sitting, SittingItem, Status
 
 __all__ = [
+    "Cycle",
+    "CategoryRequirement",
+    "Dimension",
     "Exam",
     "ExamKind",
     "ExamComponent",

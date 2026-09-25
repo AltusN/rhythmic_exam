@@ -2,8 +2,10 @@ from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
 from exams.models import (
+    CategoryRequirement,
     ComponentPracticalItem,
     ComponentQuestion,
+    Cycle,
     Exam,
     ExamComponent,
     GradeBandRow,
@@ -50,6 +52,17 @@ class ExamComponentAdmin(admin.ModelAdmin):
         MarkingTableRowInline,
         GradeBandRowInline,
     ]
+
+
+class CategoryRequirementInline(admin.TabularInline):
+    model = CategoryRequirement
+    extra = 1
+
+
+@admin.register(Cycle)
+class CycleAdmin(admin.ModelAdmin):
+    list_display = ("name", "first_year", "last_year")
+    inlines = [CategoryRequirementInline]
 
 
 @admin.register(SittingItem)

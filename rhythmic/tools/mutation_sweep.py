@@ -45,6 +45,7 @@ EXAMS_TESTS = [
     "tests/exams/test_marking.py",
     "tests/exams/test_results.py",
     "tests/exams/test_admin.py",
+    "tests/exams/test_cycles.py",
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
@@ -733,6 +734,51 @@ MUTANTS = [
         "accounts/models.py",
         "        self.email = self.email.lower()\n",
         "",
+    ),
+    # --- judge records, Task 2 -------------------------------------------------
+    (
+        # An exclusive bound moves a cycle's first year out of it.
+        "cycle-for-year-first-exclusive",
+        "exams/models/definition.py",
+        "first_year__lte=year",
+        "first_year__lt=year",
+    ),
+    (
+        "cycle-for-year-last-exclusive",
+        "exams/models/definition.py",
+        "last_year__gte=year",
+        "last_year__gt=year",
+    ),
+    (
+        "ck-cycle-ends-after-it-starts",
+        "exams/migrations/0011_cycles_and_category_requirements.py",
+        'condition=models.Q(("first_year__lte", models.F("last_year"))),',
+        'condition=models.Q(("first_year__lte", models.F("last_year") + 100)),',
+    ),
+    (
+        # Two minimums for one cell is F2's two-answer-keys shape.
+        "uq-category-requirement-cell",
+        "exams/migrations/0011_cycles_and_category_requirements.py",
+        'fields=("cycle", "category", "dimension"),',
+        'fields=("cycle", "category", "dimension", "minimum_grade"),',
+    ),
+    (
+        "ck-category-lower-bound",
+        "exams/migrations/0011_cycles_and_category_requirements.py",
+        '("category__gte", 1), ("category__lte", 4)',
+        '("category__gte", 0), ("category__lte", 4)',
+    ),
+    (
+        "ck-category-upper-bound",
+        "exams/migrations/0011_cycles_and_category_requirements.py",
+        '("category__gte", 1), ("category__lte", 4)',
+        '("category__gte", 1), ("category__lte", 5)',
+    ),
+    (
+        "ck-category-requirement-dimension",
+        "exams/migrations/0011_cycles_and_category_requirements.py",
+        '("dimension__in", ["DIFFICULTY", "EXECUTION", "ARTISTRY"])',
+        '("dimension__in", ["DIFFICULTY", "EXECUTION", "ARTISTRY", "BALANCE"])',
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),

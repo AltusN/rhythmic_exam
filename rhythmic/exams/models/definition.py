@@ -147,3 +147,71 @@ class GradeBandRow(models.Model):
                 fields=["component", "name"], name="uq_one_band_per_name_per_component"
             )
         ]
+
+
+class CycleManager(models.Manager):
+    def for_year(self, year: int) -> "Cycle":
+        # get() rather than filter().first(): a year in no cycle, or (should an
+        # official ever build an overlap) in two, must fail loudly, not pick one.
+        return self.get(first_year__lte=year, last_year__gte=year)
+
+
+class Cycle(models.Model):
+    # FIG's four-year cycle. The retest limit, the first-cycle cap and the drop floor
+    # are all counted per cycle, so it is a table rather than arithmetic on a year.
+    name = models.CharField(max_length=20, unique=True)
+    first_year = models.PositiveSmallIntegerField(unique=True)
+    last_year = models.PositiveSmallIntegerField(unique=True)
+
+    objects = CycleManager()
+
+    class Meta:
+        ordering = ["first_year"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(first_year__lte=models.F("last_year")),
+                name="ck_cycle_ends_after_it_starts",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.first_year}-{self.last_year})"
+
+
+class Dimension(models.TextChoices):
+    # General Judges' Rules section 2.6 grades three things; Difficulty is the mean
+    # of the DA and DB components.
+    DIFFICULTY = "DIFFICULTY", "Difficulty"
+    EXECUTION = "EXECUTION", "Execution"
+    ARTISTRY = "ARTISTRY", "Artistry"
+
+
+class CategoryRequirement(models.Model):
+    # One cell of the section 2.6 table: the minimum grade a dimension needs for a
+    # category. Rows, not literals -- FIG republishes the table every cycle.
+    cycle = models.ForeignKey(
+        Cycle, on_delete=models.CASCADE, related_name="category_requirements"
+    )
+    category = models.PositiveSmallIntegerField()
+    dimension = models.CharField(max_length=10, choices=Dimension.choices)
+    minimum_grade = models.CharField(max_length=50)
+
+    class Meta:
+        ordering = ["category", "dimension"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cycle", "category", "dimension"],
+                name="uq_one_minimum_per_category_dimension_per_cycle",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(category__gte=1, category__lte=4),
+                name="ck_category_requirement_is_one_to_four",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(dimension__in=Dimension.values),
+                name="ck_category_requirement_dimension_is_valid",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Category {self.category} - {self.dimension} - {self.minimum_grade}"
