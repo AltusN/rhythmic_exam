@@ -1,3 +1,4 @@
+from exams.models.certification import Certification, Source
 from exams.models.definition import (
     CategoryRequirement,
     Cycle,
@@ -31,4 +32,6 @@ __all__ = [
     "Status",
     "SittingItem",
     "ComponentResult",
+    "Certification",
+    "Source",
 ]

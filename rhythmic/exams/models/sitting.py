@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from exams.models import Exam
+from exams.models.definition import Exam
 
 
 class Status(models.TextChoices):
@@ -29,15 +29,6 @@ class Sitting(models.Model):
     )
     started_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
-    certified_at = models.DateTimeField(null=True, blank=True)
-    certified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="certifications_made",
-    )
-    outcome = models.CharField(max_length=255, blank=True)
     # What the certifying official sees instead of a name (General Judges' Rules
     # section 2.2.1: results reviewed "by judge number not name"). Not the pk, which
     # is sequential and would reveal the order of enrolment.
@@ -71,8 +62,6 @@ class Sitting(models.Model):
         ]
 
     def __str__(self) -> str:
-        if self.certified_by:
-            return f"{self.exam} - {self.judge} - {self.status} - Certified by {self.certified_by}"
         return f"{self.exam} - {self.judge} - {self.status}"
 
 

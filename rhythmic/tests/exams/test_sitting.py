@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 import pytest
 from django.db.models import ProtectedError
 
@@ -84,26 +82,3 @@ def test_a_judge_with_sittings_cannot_be_deleted(django_user_model):
 
     with pytest.raises(ProtectedError):
         judge.delete()
-
-
-@pytest.mark.django_db
-def test_certifying_records_who_and_when(django_user_model):
-    judge = django_user_model.objects.create(username="judge_judy", password="x")
-    official = django_user_model.objects.create(username="official", password="x")
-    exam = Exam.objects.create(level=1, year=2026, kind=ExamKind.THEORY)
-    sitting = Sitting.objects.create(judge=judge, exam=exam)  # PENDING, uncertified
-
-    sitting.status = Status.CERTIFIED
-    sitting.certified_by = official
-    cert_date = datetime.now(UTC)
-    sitting.certified_at = cert_date
-    sitting.save()
-
-    sitting.refresh_from_db()
-    assert sitting.certified_by == official
-    assert sitting.certified_at == cert_date
-
-    assert sitting.history.count() == 2
-    earliest = sitting.history.last()
-    assert earliest.certified_by is None
-    assert earliest.certified_at is None

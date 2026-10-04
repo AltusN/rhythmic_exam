@@ -50,6 +50,7 @@ EXAMS_TESTS = [
     "tests/exams/test_eligibility.py",
     "tests/exams/test_enrolment.py",
     "tests/exams/test_awards.py",
+    "tests/exams/test_certification.py",
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
@@ -1015,6 +1016,65 @@ MUTANTS = [
         "exams/awards.py",
         "    FAIL = 5",
         "    FAIL = 0",
+    ),
+    # --- judge records, Task 8 -------------------------------------------------
+    # `models.Q(("reason", ""), _negated=True)` occurs in two constraints, so the
+    # two reason mutants anchor on the line before it; the sweep replaces only the
+    # first match.
+    (
+        "ck-cert-exam-without-sitting",
+        "exams/migrations/0016_certification.py",
+        'models.Q(("source", "EXAM"), ("sitting__isnull", False)),',
+        'models.Q(("source", "EXAM")),',
+    ),
+    (
+        "ck-cert-imported-reason-optional",
+        "exams/migrations/0016_certification.py",
+        '                            ("source", "EXAM"),\n'
+        '                            models.Q(("reason", ""), _negated=True),\n',
+        '                            ("source", "EXAM"),\n'
+        '                            models.Q(("source", "IMPORTED")),\n',
+    ),
+    (
+        # Only the [cap] case of the per-column test sees this.
+        "ck-cert-imported-may-have-cap",
+        "exams/migrations/0016_certification.py",
+        '                                ("cap__isnull", True),\n',
+        "",
+    ),
+    (
+        "ck-cert-exam-may-lack-suggestion",
+        "exams/migrations/0016_certification.py",
+        '                                ("suggested_category__isnull", False),\n',
+        "",
+    ),
+    (
+        # Refuses a departure even with a reason.
+        "ck-cert-departure-reason-ignored",
+        "exams/migrations/0016_certification.py",
+        '                            ("category", models.F("suggested_category")),\n'
+        '                            models.Q(("reason", ""), _negated=True),\n',
+        '                            ("category", models.F("suggested_category")),\n',
+    ),
+    (
+        # Demands a reason for following the suggestion: only the valid-row control
+        # test sees this.
+        "ck-cert-following-needs-reason",
+        "exams/migrations/0016_certification.py",
+        '                            ("category", models.F("suggested_category")),\n',
+        "",
+    ),
+    (
+        "ck-cert-range-forgets-floor",
+        "exams/migrations/0016_certification.py",
+        '                            ("floor__range", (1, 5)),\n',
+        "",
+    ),
+    (
+        "ck-cert-range-admits-zero",
+        "exams/migrations/0016_certification.py",
+        '                            ("category__range", (1, 5)),\n',
+        '                            ("category__range", (0, 5)),\n',
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
