@@ -661,9 +661,16 @@ reloaded row, because a change POST can 302 without saving.
 at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
 the two-exam split and the dated exam.
 
-**Next action: Part B of the judge-records plan**,
-`docs/superpowers/plans/2026-09-25-judge-records.md`, Task 8 — `Certification` and its
-constraints. Part A (Tasks 1–7) landed 2026-09-25, written by Claude at Altus's request
+**Next action: Task 9 of the judge-records plan**, `certify`.
+`docs/superpowers/plans/2026-09-25-judge-records.md`. **Task 8 landed, `c809931`**:
+`Certification` with six check constraints, one per rule, each test shown red against
+its own constraint; `Sitting` lost `certified_at`, `certified_by` and `outcome`, so who
+certified a sitting lives in one place. The tests build rows from a valid-row helper
+(`_exam`, `_imported`) and override one key, because with six constraints on one table
+a hand-built row is easily refused for a second reason -- `category=23` in the helper
+and a range test refused by the departure rule were both caught that way. A CHECK
+passes on NULL, which made `__range` cover nullable columns for free and is why the
+departure rule depends on the computed-values rule guaranteeing `suggested_category`. Part A (Tasks 1–7) landed 2026-09-25, written by Claude at Altus's request
 (see "One deliberate exception" above): `JudgeProfile` and `RosterEntry` in `accounts`;
 `Cycle` and `CategoryRequirement` as rows; the pure eligibility rule and `enrol`, with a
 random `candidate_number` and a recorded override; the component aspect frozen onto items
@@ -761,7 +768,9 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, 2026-09-25, after Part A of the judge-records plan: **121 mutants, 121
+Latest run, after Task 8 of the judge-records plan: **129 mutants, 129 killed, 0
+survived** in 15m41s -- each migration mutant rebuilds the test database. Before it,
+after Part A: **121 mutants, 121
 killed, 0 survived** in 9m44s — after the drift-test and bytecode fixes, both in the
 `mutation-sweep` skill. The run before it, after Task 10 and the `list_filter` test, was
 **77 mutants, 77
