@@ -16,6 +16,7 @@ import importlib.util
 import pathlib
 import subprocess
 import sys
+import time
 
 RHYTHMIC = pathlib.Path(__file__).resolve().parent.parent
 PYTHON = RHYTHMIC.parent / ".venv" / "bin" / "python"
@@ -1229,6 +1230,31 @@ def run_tests(paths: list[str], *, fresh_database: bool) -> int:
     return result.returncode
 
 
+def _clock(seconds: float) -> str:
+    minutes, seconds = divmod(int(seconds), 60)
+    return f"{minutes}m{seconds:02d}s"
+
+
+def report(
+    position: int, total: int, verdict: str, name: str, took: float, started: float
+) -> None:
+    """One line per mutant, flushed as it is printed.
+
+    A full run takes nearly twenty minutes, and stdout to a pipe or a file is
+    block-buffered, so without `flush=True` nothing appears until the end -- which
+    is how runs looked before 2026-10-12. The estimate is the mean time per
+    mutant so far times the mutants left; migration mutants rebuild the database
+    and cost several times the others, so it drifts, but it drifts in sight.
+    """
+    elapsed = time.monotonic() - started
+    left = elapsed / position * (total - position)
+    print(
+        f"[{position:>{len(str(total))}}/{total}] {verdict:9s} {name:42s} "
+        f"{took:5.1f}s  elapsed {_clock(elapsed)}  ~{_clock(left)} left",
+        flush=True,
+    )
+
+
 def main() -> int:
     # `mutation_sweep.py name ...` runs only the named mutants -- for a review gate,
     # where the new entries are what is in question. The end-of-task run is still
@@ -1238,16 +1264,17 @@ def main() -> int:
     if unknown:
         print(f"no such mutant: {', '.join(sorted(unknown))}")
         return 2
+    chosen = [mutant for mutant in MUTANTS if not selected or mutant[0] in selected]
     survived, unapplied = [], []
     ran = 0
-    for name, relative_path, before, after in MUTANTS:
-        if selected and name not in selected:
-            continue
+    started = time.monotonic()
+    for position, (name, relative_path, before, after) in enumerate(chosen, start=1):
+        began = time.monotonic()
         source = RHYTHMIC / relative_path
         original = source.read_text()
         if before not in original:
             unapplied.append(name)
-            print(f"{'UNAPPLIED':9s} {name:34s} pattern not found")
+            report(position, len(chosen), "UNAPPLIED", name, 0.0, started)
             continue
         ran += 1
         try:
@@ -1264,7 +1291,8 @@ def main() -> int:
             write_source(source, original)
         if returncode == 0:
             survived.append(name)
-        print(f"{'SURVIVED' if returncode == 0 else 'KILLED':9s} {name}")
+        verdict = "SURVIVED" if returncode == 0 else "KILLED"
+        report(position, len(chosen), verdict, name, time.monotonic() - began, started)
 
     mutated_paths = sorted({relative for _, relative, _, _ in MUTANTS})
     dirty = subprocess.run(
