@@ -661,8 +661,19 @@ reloaded row, because a change POST can 302 without saving.
 at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
 the two-exam split and the dated exam.
 
-**Next action: Task 9 of the judge-records plan**, `certify`.
-`docs/superpowers/plans/2026-09-25-judge-records.md`. **Task 8 landed, `c809931`**:
+**Next action: Task 10 of the judge-records plan**, the roster import.
+**Task 9 landed, `6c0ebaa`**: `certify` re-reads the sitting under `select_for_update()`
+and guards the locked row, then builds the award from frozen bands, the live §2.6 table
+and the judge's history in recording order. The end-to-end test was green and six lines
+were still unchecked, all about judges *with a past* -- history ignored, anyone's
+history, newest-first, no previous cycle, an untrimmed reason, and storing the
+suggestion instead of the official's choice. Each got its own test, and two of those
+tests first passed for the wrong reason: the history test was killed by the departure
+constraint until the official was given a reason, and the "latest" test spread its two
+certifications across cycles, so there was nothing to choose between. The sweep is
+140/140 in 19m; it now prints progress per mutant (`cace116`).
+
+**Task 8 landed, `c809931`**:
 `Certification` with six check constraints, one per rule, each test shown red against
 its own constraint; `Sitting` lost `certified_at`, `certified_by` and `outcome`, so who
 certified a sitting lives in one place. The tests build rows from a valid-row helper
