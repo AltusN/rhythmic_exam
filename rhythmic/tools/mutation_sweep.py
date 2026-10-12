@@ -1076,6 +1076,87 @@ MUTANTS = [
         '                            ("category__range", (1, 5)),\n',
         '                            ("category__range", (0, 5)),\n',
     ),
+    # --- judge records, Task 9 -------------------------------------------------
+    (
+        # The guard reads the caller's instance before the locked re-read: a stale
+        # object still saying SUBMITTED lets an already-certified sitting through.
+        "certify-guard-trusts-instance",
+        "exams/certification.py",
+        "    with transaction.atomic():\n"
+        "        # Read the record from the database to ensure we have the latest state\n"
+        "        sitting = Sitting.objects.select_for_update().get(pk=sitting.pk)\n"
+        "        if sitting.status != Status.SUBMITTED:\n"
+        "            raise SittingNotSubmitted()\n",
+        "    if sitting.status != Status.SUBMITTED:\n"
+        "        raise SittingNotSubmitted()\n"
+        "    with transaction.atomic():\n"
+        "        sitting = Sitting.objects.select_for_update().get(pk=sitting.pk)\n",
+    ),
+    (
+        "certify-theory-allowed",
+        "exams/certification.py",
+        "        if sitting.exam.kind != ExamKind.PRACTICAL:",
+        "        if False:",
+    ),
+    (
+        "certify-results-check-forgets-av",
+        "exams/certification.py",
+        "missing = set(Aspect.values) - set(",
+        'missing = {"DA", "DB", "EX"} - set(',
+    ),
+    (
+        "certify-sitting-left-submitted",
+        "exams/certification.py",
+        "        sitting.status = Status.CERTIFIED\n",
+        "",
+    ),
+    (
+        # Every judge's certifications counted as this judge's history.
+        "certify-history-anyones",
+        "exams/certification.py",
+        "profile.certifications.select_related",
+        "Certification.objects.select_related",
+    ),
+    (
+        # Every judge treated as a first-time brevet: a returning Category 1 capped at 3.
+        "certify-history-ignored",
+        "exams/certification.py",
+        "            history=history,\n",
+        "            history=[],\n",
+    ),
+    (
+        # Best rather than latest -- section 2.7's retest would not be final.
+        "certify-history-newest-first",
+        "exams/certification.py",
+        '.order_by("pk")',
+        '.order_by("-pk")',
+    ),
+    (
+        "certify-no-previous-cycle",
+        "exams/certification.py",
+        "previous_cycle_first_year=previous.first_year if previous else None,",
+        "previous_cycle_first_year=None,",
+    ),
+    (
+        "certify-reason-not-stripped",
+        "exams/certification.py",
+        "reason=reason.strip(),",
+        "reason=reason,",
+    ),
+    (
+        # The official's judgement silently replaced by the suggestion. Only a
+        # departure can tell the two apart -- every other test follows it.
+        "certify-stores-suggestion-not-choice",
+        "exams/certification.py",
+        "            category=category,\n",
+        "            category=bounds.suggested,\n",
+    ),
+    (
+        "certify-examination-stored-as-suggested",
+        "exams/certification.py",
+        "examination_category=examination,",
+        "examination_category=bounds.suggested,",
+    ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
 ]
