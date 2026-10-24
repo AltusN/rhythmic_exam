@@ -619,6 +619,32 @@ status read instead of the locked row's; the frozen bands replaced by live ones.
   `apply_roster(changes, *, year, official)`; `RosterChanged` when apply's recomputed diff
   differs from the previewed one.
 
+**As built (2026-10-24), five deviations, each found while writing it:**
+
+- **`change` holds `(stored, incoming)` pairs, not incoming rows.** With only the incoming
+  row, an edit to a judge who is already a change leaves the diff identical, so the stale
+  check cannot see it — `test_apply_refuses_a_stale_preview` stayed `DID NOT RAISE` against
+  a correct check until the stored row joined the diff. The preview page needs the old value
+  anyway.
+- **The stale check lives in `confirm_roster(incoming, *, year, preview)`**, which recomputes
+  `diff_roster(load_roster(year), incoming)` and calls `apply_roster(changes, *, year)` only
+  if it equals the preview. `load_roster(year)` reads the stored roster back as `RosterRow`s
+  — `tuple(levels)`, because `[1, 2] != (1, 2)` would make every stored judge a change.
+- **No `atomic()` around check-and-apply.** Under READ COMMITTED a bare transaction does not
+  stop an edit landing between `load_roster` and `apply_roster`, and `apply_roster` is
+  already atomic. The check covers the preview-to-confirm window; a comment in
+  `confirm_roster` says so. An outer `atomic()` would also make the check-after-writes
+  mutant indistinguishable from the correct order.
+- **No `official` parameter.** `HistoryRequestMiddleware` already records the request's user
+  on every history row the view causes; a second route to the same field could disagree with
+  the first. Pinned at the view: the history rows of an import name the official who posted it.
+- **`test_a_dry_run_writes_nothing` moves to the view step.** `parse_roster`, `diff_roster`
+  and `load_roster` cannot write by construction; the upload view is the dry run that can.
+
+A guard needs a test where it fires and one where it doesn't:
+`test_confirm_applies_a_fresh_roster` is the second, and without it a `confirm_roster` that
+always raises passed all seventeen others.
+
 `parse_roster` and `diff_roster` are pure — plain dataclasses in, plain dataclasses out.
 `csv.DictReader` produces the rows; the view does that, the functions never see a file.
 
