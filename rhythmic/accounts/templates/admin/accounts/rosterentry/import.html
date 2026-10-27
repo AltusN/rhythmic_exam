@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>Import Roster</h1>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    {% for error in errors %}
+      <p>Line {{ error.line }}: {{ error.message }}</p>
+    {% endfor %}
+
+    <input type="submit" value="Import">
+  </form>
+  {% if preview %}
+    {% if preview.add %}
+      <h2>Add</h2>
+      {% for row in preview.add %}
+        <p>{{ row.sagf_id }} — {{ row.email }} ({{ row.levels|join:", " }})</p>
+      {% endfor %}
+    {% endif %}
+
+    {% if preview.change %}
+      <h2>Change</h2>
+      {% for stored, incoming in preview.change %}
+        <p>
+          {{ incoming.sagf_id }}:
+          {{ stored.email }} → {{ incoming.email }};
+          levels {{ stored.levels|join:", " }} → {{ incoming.levels|join:", " }}
+        </p>
+      {% endfor %}
+    {% endif %}
+
+    {% if preview.remove %}
+      <h2>Remove</h2>
+      {% for row in preview.remove %}
+        <p>{{ row.sagf_id }} — {{ row.email }} ({{ row.levels|join:", " }})</p>
+      {% endfor %}
+    {% endif %}
+    <form method="post" action="{% url 'admin:accounts_rosterentry_confirm' %}">
+      {% csrf_token %}
+      <input type="submit" value="Confirm import">
+    </form>
+  {% endif %}
+{% endblock %}
