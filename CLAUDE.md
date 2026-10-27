@@ -582,7 +582,7 @@ says nothing whatever about commit messages; don't mistake one for the other.
 
 **Four plans finished: the scoring package (seven tasks), the Django skeleton
 (five), the questions app (nine) and exams-and-sittings (ten, closed 2026-09-25 at
-`b8d7b6b`).** As of 2026-09-25 the suite passes — 216 tests and both
+`b8d7b6b`).** As of 2026-09-25 the suite passed 216 tests (339 after Task 10 of the judge-records plan) and both
 `ruff check .` and `ruff format --check .` are clean. Run all three from `rhythmic/`.
 
 **Postgres must be running for the full suite to pass.** `docker compose up -d` from
@@ -661,7 +661,37 @@ reloaded row, because a change POST can 302 without saving.
 at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
 the two-exam split and the dated exam.
 
-**Next action: Task 10 of the judge-records plan**, the roster import.
+**Next action: Task 11 of the judge-records plan**, the category import.
+**Task 10 landed, `7a1befa`** (catalogue `ddfdf52`): upload → preview → confirm in the
+roster admin, Altus writing again after Part A. Five deviations from the plan are recorded
+in it (`92b2176`). Three findings worth carrying into Task 11, which has the same shape:
+
+- **A diff that records only the destination cannot detect drift at the source.**
+  `change` held incoming rows, so an edit to a judge already in the diff left the
+  recomputed diff identical and the stale check passed — a correct `!=` over data that
+  could not see the edit. It now holds `(stored, incoming)` pairs. The stale test found
+  this by staying `DID NOT RAISE` against a correct check.
+- **An empty list meant both "no rows" and "file rejected".** `parse_roster` returns `[]`
+  on any error; the view diffed it, and one typo previewed as *remove every judge*. F10
+  in roster form. Any import must branch on the error half of the tuple before diffing.
+- **`count()` cannot see a write that balances.** The plan's dry-run test seeded one
+  judge and uploaded another — one add, one remove — so a preview that *applied* left the
+  count unchanged and passed. Assert the table as a literal. Likewise `ModelAdmin` is one
+  instance for every request: a preview kept on `self` was shown to the next official,
+  and the test only went red because another test had run first.
+
+The view is POST-only for confirm (CSRF does not check GET), reads the preview from the
+session as recorded rather than recomputing it, decodes uploads as `utf-8-sig` for
+Excel, and takes the official from `HistoryRequestMiddleware` — no `official`
+parameter. Templates are re-indented with `djhtml` (`df6586f`), the only formatter here
+that understands `{% %}` nesting.
+
+**Ad-hoc review mutants run in a scratch copy, never the repo.** Twice in Task 10 the
+/tmp scratch tree had been cleared, a failed `cd` left the script in the repo, and
+mutants landed in Altus's *untracked* files — no git copy to restore from. Rebuild the
+copy at the start of every round with a script that refuses to run under the repo path.
+The sweep itself is different: it restores in a `finally`, and runs only on committed code.
+
 **Task 9 landed, `6c0ebaa`**: `certify` re-reads the sitting under `select_for_update()`
 and guards the locked row, then builds the award from frozen bands, the live §2.6 table
 and the judge's history in recording order. The end-to-end test was green and six lines
@@ -779,8 +809,9 @@ SURVIVED mutant is a change to the code nobody noticed. Run from `rhythmic/`:
 ../.venv/bin/python tools/mutation_sweep.py
 ```
 
-Latest run, after Task 8 of the judge-records plan: **129 mutants, 129 killed, 0
-survived** in 15m41s -- each migration mutant rebuilds the test database. Before it,
+Latest run, after Task 10 of the judge-records plan: **183 mutants, 183 killed, 0
+survived, 0 unapplied** in 25m10s, 43 of them the roster import's. After Task 8 it was
+129/129 in 15m41s -- each migration mutant rebuilds the test database. Before it,
 after Part A: **121 mutants, 121
 killed, 0 survived** in 9m44s — after the drift-test and bytecode fixes, both in the
 `mutation-sweep` skill. The run before it, after Task 10 and the `list_filter` test, was
