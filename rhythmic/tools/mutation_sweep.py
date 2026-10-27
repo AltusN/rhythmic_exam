@@ -55,6 +55,8 @@ EXAMS_TESTS = [
 ]
 ACCOUNTS_TESTS = [
     "tests/accounts/test_models.py",
+    "tests/accounts/test_roster.py",
+    "tests/accounts/test_roster_admin.py",
 ]
 # By name, through -k: `--deselect` takes a node ID, and node IDs are relative to the
 # rootdir, which is the repository root (pytest.ini) -- so "tests/config/..." matched
@@ -1160,6 +1162,367 @@ MUTANTS = [
     ),
     # Both FKs into Sitting CASCADE, so this one click erases every mark and grade.
     ("exams-admin-sitting-deletable", "exams/admin.py", *_allow(_SITTING, "delete")),
+    # --- judge records, Task 10: parse ---------------------------------------
+    (
+        "roster-email-not-lowercased",
+        "accounts/roster.py",
+        'email=row["email"].lower(), levels=tuple(levels)',
+        'email=row["email"], levels=tuple(levels)',
+    ),
+    (
+        "roster-levels-split-on-comma",
+        "accounts/roster.py",
+        'row["levels"].split(";")',
+        'row["levels"].split(",")',
+    ),
+    (
+        # The plan's review gate: a second row silently replaces the first.
+        "roster-duplicates-last-wins",
+        "accounts/roster.py",
+        "        if sagf_id in seen:\n",
+        "        if False:\n",
+    ),
+    (
+        # Only a third row with the same id sees this: the second would still be
+        # reported, but then overwrites `seen`, so the third names the wrong line.
+        "roster-duplicate-not-skipped",
+        "accounts/roster.py",
+        "            continue\n        seen[sagf_id] = line\n",
+        "            pass\n        seen[sagf_id] = line\n",
+    ),
+    (
+        "roster-line-numbers-ignore-header",
+        "accounts/roster.py",
+        "enumerate(rows, start=2)",
+        "enumerate(rows, start=1)",
+    ),
+    (
+        "roster-errors-do-not-reject-file",
+        "accounts/roster.py",
+        "return ([] if errors else parsed, errors)",
+        "return (parsed, errors)",
+    ),
+    (
+        # An id of exactly the column's length must still parse.
+        "roster-sagf-id-length-off-by-one",
+        "accounts/roster.py",
+        "if len(sagf_id) > MAX_SAGF_ID:",
+        "if len(sagf_id) >= MAX_SAGF_ID:",
+    ),
+    (
+        # Postgres would refuse it at confirm, as a 500 instead of a line number.
+        "roster-sagf-id-length-unchecked",
+        "accounts/roster.py",
+        "if len(sagf_id) > MAX_SAGF_ID:",
+        "if False:",
+    ),
+    # --- judge records, Task 10: diff ----------------------------------------
+    (
+        "roster-diff-no-adds",
+        "accounts/roster.py",
+        "return RosterChanges(add=added, change=change, remove=remove)",
+        "return RosterChanges(add=[], change=change, remove=remove)",
+    ),
+    (
+        "roster-diff-no-removes",
+        "accounts/roster.py",
+        "return RosterChanges(add=added, change=change, remove=remove)",
+        "return RosterChanges(add=added, change=change, remove=[])",
+    ),
+    (
+        "roster-diff-unchanged-is-change",
+        "accounts/roster.py",
+        "existing_by_id[row.sagf_id] != row\n",
+        "existing_by_id[row.sagf_id] == row\n",
+    ),
+    (
+        # A levels-only change would pass unnoticed into the stored roster.
+        "roster-diff-compares-email-only",
+        "accounts/roster.py",
+        "existing_by_id[row.sagf_id] != row\n",
+        "existing_by_id[row.sagf_id].email != row.email\n",
+    ),
+    (
+        # The stored row dropped from the pair. An edit to a judge already in the
+        # diff then leaves the diff identical, and the stale check cannot see it --
+        # which is how the pair came to exist (2026-10-24).
+        "roster-diff-change-forgets-stored",
+        "accounts/roster.py",
+        "(existing_by_id[row.sagf_id], row)",
+        "(row, row)",
+    ),
+    # --- judge records, Task 10: apply ---------------------------------------
+    (
+        # bulk_create skips save() and signals: no history row for the add.
+        "roster-apply-bulk-create",
+        "accounts/roster.py",
+        "        for row in changes.add:\n"
+        "            RosterEntry.objects.create(\n"
+        "                sagf_id=row.sagf_id,\n"
+        "                email=row.email,\n"
+        "                year=year,\n"
+        "                levels=row.levels,\n"
+        "            )\n",
+        "        RosterEntry.objects.bulk_create(\n"
+        "            RosterEntry(\n"
+        "                sagf_id=row.sagf_id, email=row.email, year=year, levels=row.levels\n"
+        "            )\n"
+        "            for row in changes.add\n"
+        "        )\n",
+    ),
+    (
+        # The plan's review gate: update() writes the row and no history.
+        "roster-apply-bulk-update",
+        "accounts/roster.py",
+        "            entry = RosterEntry.objects.get(sagf_id=row.sagf_id, year=year)\n"
+        "            entry.email = row.email\n"
+        "            entry.levels = row.levels\n"
+        "            entry.save()\n",
+        "            RosterEntry.objects.filter(sagf_id=row.sagf_id, year=year).update(\n"
+        "                email=row.email, levels=row.levels\n"
+        "            )\n",
+    ),
+    (
+        # Killed only under django_db(transaction=True): inside the default test
+        # transaction the DataError aborts everything anyway.
+        "roster-apply-not-atomic",
+        "accounts/roster.py",
+        "    with transaction.atomic():\n        for row in changes.add:\n",
+        "    if True:\n        for row in changes.add:\n",
+    ),
+    (
+        "roster-remove-ignores-year",
+        "accounts/roster.py",
+        "            entry = RosterEntry.objects.get(sagf_id=row.sagf_id, year=year)\n"
+        "            entry.delete()\n",
+        "            RosterEntry.objects.filter(sagf_id=row.sagf_id).delete()\n",
+    ),
+    (
+        # Empties the year's whole roster to remove one judge.
+        "roster-remove-ignores-sagf-id",
+        "accounts/roster.py",
+        "            entry = RosterEntry.objects.get(sagf_id=row.sagf_id, year=year)\n"
+        "            entry.delete()\n",
+        "            RosterEntry.objects.filter(year=year).delete()\n",
+    ),
+    # --- judge records, Task 10: load, confirm, session ----------------------
+    (
+        "roster-load-all-years",
+        "accounts/roster.py",
+        "RosterEntry.objects.filter(year=year).values(",
+        "RosterEntry.objects.all().values(",
+    ),
+    (
+        # Survives a test that inserts in sorted order: Postgres hands back a small
+        # table in insertion order. The test inserts SAGF-0003 before SAGF-0002.
+        "roster-load-unordered",
+        "accounts/roster.py",
+        '.values("sagf_id", "email", "levels")',
+        '.values("sagf_id", "email", "levels").order_by()',
+    ),
+    (
+        # [1, 2] != (1, 2): every stored judge becomes a change.
+        "roster-load-levels-as-list",
+        "accounts/roster.py",
+        'levels=tuple(row["levels"]),',
+        'levels=row["levels"],',
+    ),
+    (
+        # The plan's review gate.
+        "roster-confirm-no-stale-check",
+        "accounts/roster.py",
+        "    if diff_roster(load_roster(year=year), incoming) != preview:\n"
+        "        raise RosterChanged\n",
+        "",
+    ),
+    (
+        # Only test_confirm_applies_a_fresh_roster sees this: every other confirm
+        # test expects a refusal.
+        "roster-confirm-always-refuses",
+        "accounts/roster.py",
+        "    if diff_roster(load_roster(year=year), incoming) != preview:\n"
+        "        raise RosterChanged\n",
+        "    raise RosterChanged\n",
+    ),
+    (
+        # Still raises, so pytest.raises is satisfied; only the table literal sees
+        # the direct edit overwritten.
+        "roster-confirm-checks-after-writing",
+        "accounts/roster.py",
+        "    if diff_roster(load_roster(year=year), incoming) != preview:\n"
+        "        raise RosterChanged\n"
+        "\n"
+        "    apply_roster(preview, year=year)\n",
+        "    stale = diff_roster(load_roster(year=year), incoming) != preview\n"
+        "    apply_roster(preview, year=year)\n"
+        "    if stale:\n"
+        "        raise RosterChanged\n",
+    ),
+    (
+        # Invisible unless the test sends the data through json: in memory the
+        # tuples survive and tuple() of a tuple changes nothing.
+        "roster-session-levels-as-list",
+        "accounts/roster.py",
+        'levels=tuple(data["levels"]),',
+        'levels=data["levels"],',
+    ),
+    (
+        "roster-session-change-pair-reversed",
+        "accounts/roster.py",
+        "                _row_from_dict(old),\n                _row_from_dict(new),\n",
+        "                _row_from_dict(new),\n                _row_from_dict(old),\n",
+    ),
+    # --- judge records, Task 10: admin views ---------------------------------
+    (
+        # The admin's catch-all <path:object_id>/ takes "import" for a pk.
+        "roster-admin-urls-after-catchall",
+        "accounts/admin.py",
+        '        return [\n            path(\n                "import/",\n',
+        "        return super().get_urls() + [\n"
+        "            path(\n"
+        '                "import/",\n',
+    ),
+    (
+        "roster-admin-import-not-staff-only",
+        "accounts/admin.py",
+        "self.admin_site.admin_view(self.import_view)",
+        "self.import_view",
+    ),
+    (
+        # CSRF protection does not check GET: any page could confirm an import.
+        "roster-admin-confirm-accepts-get",
+        "accounts/admin.py",
+        "require_POST(self.confirm_view)",
+        "self.confirm_view",
+    ),
+    (
+        # The plan's review gate, and count() == 1 could not see it: the fixture's
+        # one add and one remove cancel. Only the table literal kills it.
+        "roster-admin-preview-writes",
+        "accounts/admin.py",
+        "                    preview = diff_roster(load_roster(year), parsed)\n",
+        "                    preview = diff_roster(load_roster(year), parsed)\n"
+        '                    __import__("accounts.roster").roster.apply_roster(\n'
+        "                        preview, year=year\n"
+        "                    )\n",
+    ),
+    (
+        # ModelAdmin is one instance for every request: a preview kept on it shows
+        # one official's file to the next.
+        "roster-admin-preview-shared-between-requests",
+        "accounts/admin.py",
+        "        preview = None\n"
+        "        errors = []\n"
+        "        from django.shortcuts import render\n"
+        "\n"
+        '        if request.method == "POST":\n'
+        "            form = RosterImportForm(request.POST, request.FILES)\n"
+        "            if form.is_valid():\n"
+        '                uploaded_file = form.cleaned_data["roster"]\n'
+        '                year = form.cleaned_data["year"]\n'
+        '                lines = uploaded_file.read().decode("utf-8-sig").splitlines()\n'
+        "                rows = list(csv.DictReader(lines))\n"
+        "                parsed, errors = parse_roster(rows)\n"
+        "                if not errors:\n"
+        "                    preview = diff_roster(load_roster(year), parsed)\n",
+        '        preview = getattr(type(self), "_last_preview", None)\n'
+        "        errors = []\n"
+        "        from django.shortcuts import render\n"
+        "\n"
+        '        if request.method == "POST":\n'
+        "            form = RosterImportForm(request.POST, request.FILES)\n"
+        "            if form.is_valid():\n"
+        '                uploaded_file = form.cleaned_data["roster"]\n'
+        '                year = form.cleaned_data["year"]\n'
+        '                lines = uploaded_file.read().decode("utf-8-sig").splitlines()\n'
+        "                rows = list(csv.DictReader(lines))\n"
+        "                parsed, errors = parse_roster(rows)\n"
+        "                if not errors:\n"
+        "                    preview = diff_roster(load_roster(year), parsed)\n"
+        "                    type(self)._last_preview = preview\n",
+    ),
+    (
+        "roster-admin-diffs-wrong-year",
+        "accounts/admin.py",
+        "diff_roster(load_roster(year), parsed)",
+        "diff_roster(load_roster(year - 1), parsed)",
+    ),
+    (
+        # One bad cell parses to [] -- and [] diffs as "remove every judge".
+        "roster-admin-diffs-despite-errors",
+        "accounts/admin.py",
+        "                if not errors:\n",
+        "                if True:\n",
+    ),
+    (
+        # Excel's CSV UTF-8 starts with a BOM; the first header becomes ﻿sagf_id.
+        "roster-admin-ignores-bom",
+        "accounts/admin.py",
+        'decode("utf-8-sig")',
+        'decode("utf-8")',
+    ),
+    (
+        "roster-admin-session-not-stored",
+        "accounts/admin.py",
+        'request.session["roster_import"] = {',
+        "_ = {",
+    ),
+    (
+        # The view bypassing the stale check -- confirm_roster's own tests cannot
+        # see which function the view calls.
+        "roster-admin-confirm-skips-stale-check",
+        "accounts/admin.py",
+        'confirm_roster(incoming, year=data["year"], preview=preview)',
+        '__import__("accounts.roster").roster.apply_roster(preview, year=data["year"])',
+    ),
+    (
+        # Nothing applied and nothing said: the official assumes it worked.
+        "roster-admin-stale-is-silent",
+        "accounts/admin.py",
+        "            messages.error(\n"
+        '                request, "The roster changed since the preview. Upload the file again."\n'
+        "            )\n",
+        "",
+    ),
+    (
+        "roster-admin-nothing-waiting-crashes",
+        "accounts/admin.py",
+        'request.session.pop("roster_import", None)',
+        'request.session.pop("roster_import")',
+    ),
+    # --- judge records, Task 10: the preview template ------------------------
+    (
+        "roster-template-hides-errors",
+        "accounts/templates/admin/accounts/rosterentry/import.html",
+        "    {% for error in errors %}\n"
+        "      <p>Line {{ error.line }}: {{ error.message }}</p>\n"
+        "    {% endfor %}\n",
+        "",
+    ),
+    (
+        "roster-template-hides-adds",
+        "accounts/templates/admin/accounts/rosterentry/import.html",
+        "      {% for row in preview.add %}\n",
+        "      {% for row in preview.nothing %}\n",
+    ),
+    (
+        "roster-template-hides-changes",
+        "accounts/templates/admin/accounts/rosterentry/import.html",
+        "      {% for stored, incoming in preview.change %}\n",
+        "      {% for stored, incoming in preview.nothing %}\n",
+    ),
+    (
+        "roster-template-hides-removes",
+        "accounts/templates/admin/accounts/rosterentry/import.html",
+        "      {% for row in preview.remove %}\n",
+        "      {% for row in preview.nothing %}\n",
+    ),
+    (
+        "roster-template-no-confirm-button",
+        "accounts/templates/admin/accounts/rosterentry/import.html",
+        "{% url 'admin:accounts_rosterentry_confirm' %}",
+        "",
+    ),
 ]
 
 HISTORY_TAILS = {
