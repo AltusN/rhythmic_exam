@@ -661,7 +661,9 @@ reloaded row, because a change POST can 302 without saving.
 at the component percentage, F9 by absence of any level comparison, and F10/F11/F12 by
 the two-exam split and the dated exam.
 
-**Next action: Task 11 of the judge-records plan**, the category import.
+**Next action: Task 11 of the judge-records plan**, the category import — **paused
+2026-10-31 before the admin view**; the plan's Task 11 section records where it stands and
+the decisions taken. The work is uncommitted in Altus's tree.
 **Task 10 landed, `7a1befa`** (catalogue `ddfdf52`): upload → preview → confirm in the
 roster admin, Altus writing again after Part A. Five deviations from the plan are recorded
 in it (`92b2176`). Three findings worth carrying into Task 11, which has the same shape:

@@ -706,6 +706,38 @@ judge whose imported category differs is a **new row** superseding the old, and 
 missing from the file keeps their history. So the diff has *add* and *supersede* only. Say so
 in the preview.
 
+**In progress (2026-10-31): everything but the admin view is written, 14 tests, each shown
+red; 29 review mutants, one harmless survivor.** Decisions taken while writing it:
+
+- **"Existing" is the judge's latest certification *in the chosen cycle*, of either source.**
+  Cycle-scoped because the floor (`awards.py`) needs a certification in the previous cycle:
+  matching a 2021 `TWO` against a 2025 `TWO` and writing nothing would cost the judge their
+  2029 floor. Either source, because a register agreeing with an exam certification has
+  nothing to add. `test_load_ignores_other_cycles` and `test_load_includes_exam_certifications`
+  pin the two halves; each was the sole killer of its filter mutant.
+- **`supercedes` holds `(stored, incoming)` pairs**, Task 10's drift lesson; the
+  `incoming-only` mutant is what the pair exists for. (Spelt `supercedes` in code — Altus's
+  call.)
+- **`apply_categories(changes, *, cycle, official, date)` takes `official`**, unlike the roster:
+  `Certification` has no history table, so the middleware has nowhere to record the user, and
+  `certified_by` is required. `date` is passed in so the reason text asserts as a literal.
+- **`confirm_categories(incoming, *, cycle, official, date, preview)`** holds the stale check.
+  Its fresh-preview test must start from a *stored* certification: against an empty table
+  `load_categories` returns `[]`, which is exactly what the `ignores-database` mutant
+  substitutes, and that mutant survived until the setup gained a row.
+- **Two of the table's tests are dropped, neither having a mutant of its own.**
+  `test_reimporting_the_same_category_changes_nothing` is killed only by
+  `unchanged-is-supersede`, which the diff test already kills; `test_a_missing_judge_keeps_their_history`
+  has no line to break — there is no delete in the module, and `CategoryChanges` has no field
+  for one. `test_an_import_reuses_an_existing_profile` is likewise covered by the supersede
+  test, since `sagf_id` is unique and `create` would raise there.
+- **`judge`, `cycle`, `official` and `sitting` moved to `tests/exams/conftest.py`** so the new
+  file can use them. `test_enrolment.py` keeps its own `judge` and `official`, which shadow them.
+
+**Remaining:** the admin view (upload with a cycle chooser → preview → confirm), with
+`test_a_dry_run_writes_nothing` and Task 10's rule of branching on parse errors before
+diffing; then the catalogue entries and the sweep.
+
 | test | asserts |
 |---|---|
 | `test_an_import_creates_a_judge_without_a_login` | unknown `sagf_id` → a profile with `user_id is None` and one `IMPORTED` certification |
