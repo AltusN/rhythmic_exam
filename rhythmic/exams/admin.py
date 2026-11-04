@@ -3,6 +3,7 @@ from simple_history.admin import SimpleHistoryAdmin
 
 from exams.models import (
     CategoryRequirement,
+    Certification,
     ComponentPracticalItem,
     ComponentQuestion,
     Cycle,
@@ -98,6 +99,18 @@ class SittingAdmin(SimpleHistoryAdmin):
         return False
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Certification)
+class CertificationAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):

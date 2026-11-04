@@ -3,9 +3,11 @@ from decimal import Decimal
 import pytest
 from django.urls import reverse
 
+from exams.awards import Category
 from exams.freeze import start_sitting
 from exams.marking import submit_sitting
 from exams.models import (
+    Certification,
     ComponentQuestion,
     Exam,
     ExamComponent,
@@ -14,10 +16,23 @@ from exams.models import (
     MarkingScheme,
     Sitting,
     SittingItem,
+    Source,
     Status,
 )
 from exams.models.sitting import ComponentResult
 from questions.models import Apparatus, Aspect, Option, PracticalItem, Question, Routine
+
+
+@pytest.fixture
+def certification(admin_client, judge, official, cycle):
+    return Certification.objects.create(
+        judge=judge,
+        cycle=cycle,
+        category=Category.TWO,
+        source=Source.IMPORTED,
+        reason="Imported from register",
+        certified_by=official,
+    )
 
 
 @pytest.mark.django_db
@@ -350,5 +365,28 @@ def test_a_sitting_cannot_be_deleted_through_the_admin(admin_client, django_user
 def test_sitting_records_cannot_be_added_through_the_admin(admin_client, url_name):
     url = reverse(url_name)
     response = admin_client.get(url)
+
+    assert response.status_code == 403
+
+
+def test_certification_cannot_be_added_through_the_admin(admin_client):
+    url = reverse("admin:exams_certification_add")
+    response = admin_client.get(url)
+
+    assert response.status_code == 403
+
+
+def test_certification_cannot_be_changed_through_the_admin(admin_client, certification):
+
+    url = reverse("admin:exams_certification_change", args=[certification.pk])
+    response = admin_client.post(url)
+
+    assert response.status_code == 403
+
+
+def test_certification_cannot_be_deleted_through_the_admin(admin_client, certification):
+
+    url = reverse("admin:exams_certification_delete", args=[certification.pk])
+    response = admin_client.post(url, {"post": "yes"})
 
     assert response.status_code == 403
