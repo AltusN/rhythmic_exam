@@ -719,7 +719,9 @@ departure rule depends on the computed-values rule guaranteeing `suggested_categ
 `Cycle` and `CategoryRequirement` as rows; the pure eligibility rule and `enrol`, with a
 random `candidate_number` and a recorded override; the component aspect frozen onto items
 and results; and `exams/awards.py`, the §2.6 examination category and the award bounds.
-Plan 2 (sign-in) follows, then the React island last.
+Then the developer guide and sample data
+(`docs/superpowers/specs/2026-11-04-developer-guide-and-samples-design.md`, after the
+judge-records plan closes at Task 13), then Plan 2 (sign-in), then the React island last.
 
 **A data assertion on an admin POST goes vacuous when the model gains a required
 field** (2026-09-25). `test_a_sitting_cannot_be_changed_through_the_admin` asserted only
