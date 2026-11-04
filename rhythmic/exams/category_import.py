@@ -1,5 +1,6 @@
 import datetime
 from dataclasses import dataclass
+from typing import Any
 
 from django.db import transaction
 
@@ -23,6 +24,20 @@ class CategoryChanges:
 
 class CategoryChanged(Exception):
     pass
+
+
+def _row_to_dict(row: CategoryRow) -> dict[str, object]:
+    return {
+        "sagf_id": row.sagf_id,
+        "category": int(row.category),
+    }
+
+
+def _row_from_dict(data: dict[str, Any]) -> CategoryRow:
+    return CategoryRow(
+        sagf_id=data["sagf_id"],
+        category=Category(int(data["category"])),
+    )
 
 
 def diff_categories(existing, incoming):
@@ -122,3 +137,29 @@ def confirm_categories(
         raise CategoryChanged("Incoming categories do not match the preview")
 
     apply_categories(preview, cycle=cycle, official=official, date=date)
+
+
+def to_session(incoming, preview):
+    return {
+        "incoming": [_row_to_dict(row) for row in incoming],
+        "preview": {
+            "add": [_row_to_dict(row) for row in preview.add],
+            "supercedes": [
+                (_row_to_dict(old), _row_to_dict(new))
+                for old, new in preview.supercedes
+            ],
+        },
+    }
+
+
+def from_session(data):
+    incoming = [_row_from_dict(row) for row in data["incoming"]]
+    preview_data = data["preview"]
+    preview = CategoryChanges(
+        add=[_row_from_dict(row) for row in preview_data["add"]],
+        supercedes=[
+            (_row_from_dict(old), _row_from_dict(new))
+            for old, new in preview_data["supercedes"]
+        ],
+    )
+    return incoming, preview

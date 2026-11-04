@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import pytest
@@ -253,3 +254,24 @@ def test_confirm_applies_a_fresh_preview(judge, cycle, official):
     assert list(
         judge.certifications.order_by("pk").values_list("category", flat=True)
     ) == [2, 1]
+
+
+def test_a_session_roundtrip_keeps_the_preview_intact():
+    incoming = [
+        CategoryRow(sagf_id="T001", category=Category.ONE),
+        CategoryRow(sagf_id="T002", category=Category.TWO),
+    ]
+    preview = CategoryChanges(
+        add=[CategoryRow(sagf_id="T001", category=Category.ONE)],
+        supercedes=[
+            (
+                CategoryRow(sagf_id="T002", category=Category.TWO),
+                CategoryRow(sagf_id="T002", category=Category.ONE),
+            )
+        ],
+    )
+    session_data = json.loads(json.dumps(category_import.to_session(incoming, preview)))
+    restored_incoming, restored_preview = category_import.from_session(session_data)
+
+    assert restored_incoming == incoming
+    assert restored_preview == preview
