@@ -1,6 +1,12 @@
+import csv
+
+from django import forms
 from django.contrib import admin
+from django.shortcuts import render
+from django.urls import path
 from simple_history.admin import SimpleHistoryAdmin
 
+from exams.category_import import diff_categories, load_categories, parse_categories
 from exams.models import (
     CategoryRequirement,
     Certification,
@@ -115,3 +121,44 @@ class CertificationAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_urls(self):
+        return [
+            path(
+                "import/",
+                self.admin_site.admin_view(self.import_view),
+                name="exams_certification_import",
+            ),
+        ] + super().get_urls()
+
+    def import_view(self, request):
+        preview = None
+        errors = []
+
+        if request.method == "POST":
+            form = CategoryImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                categories_file = form.cleaned_data["categories"]
+                cycle = form.cleaned_data["cycle"]
+                lines = categories_file.read().decode("utf-8-sig").splitlines()
+                rows = list(csv.DictReader(lines))
+                parsed, errors = parse_categories(rows)
+                if not errors:
+                    preview = diff_categories(load_categories(cycle), parsed)
+        else:
+            form = CategoryImportForm()
+        return render(
+            request,
+            "admin/exams/certification/import.html",
+            {
+                **self.admin_site.each_context(request),
+                "form": form,
+                "preview": preview,
+                "errors": errors,
+            },
+        )
+
+
+class CategoryImportForm(forms.Form):
+    categories = forms.FileField()
+    cycle = forms.ModelChoiceField(queryset=Cycle.objects.all())

@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>Category Import</h1>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    {% for error in errors %}
+      <p>Line {{ error.line }}: {{ error.message }}</p>
+    {% endfor %}
+    <button type="submit" value="Import">Import</button>
+  </form>
+  {% if preview %}
+    {% if preview.add %}
+      <h2>Added Categories</h2>
+      <ul>
+        {% for row in preview.add %}
+          <li>{{ row.sagf_id }} - {{ row.category }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% if preview.supercedes %}
+      <h2>Superseded Categories</h2>
+      <ul>
+        {% for stored, incoming in preview.supercedes %}
+          <li>{{ stored.sagf_id }}: {{ stored.category }} → {{ incoming.category }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endif %}
+
+{% endblock %}
