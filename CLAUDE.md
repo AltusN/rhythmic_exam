@@ -662,9 +662,10 @@ at the component percentage, F9 by absence of any level comparison, and F10/F11/
 the two-exam split and the dated exam.
 
 **Next action: Task 11 of the judge-records plan**, the category import — **paused
-2026-10-31 before the admin view**; the plan's Task 11 section records where it stands and
-the decisions taken. The functions and their tests landed in `219b62f`; the view
-will be its own commit.
+2026-11-07 before confirm**; the plan's Task 11 section records where it stands and the
+decisions taken. Functions `219b62f`; the locked `CertificationAdmin` `b56da69`; session
+round trip `3a955f3`; upload and preview `ea196d0`. Confirm is next, then the catalogue
+and the sweep.
 **Task 10 landed, `7a1befa`** (catalogue `ddfdf52`): upload → preview → confirm in the
 roster admin, Altus writing again after Part A. Five deviations from the plan are recorded
 in it (`92b2176`). Three findings worth carrying into Task 11, which has the same shape:

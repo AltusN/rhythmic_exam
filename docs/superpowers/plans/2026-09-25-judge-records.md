@@ -734,9 +734,42 @@ red; 29 review mutants, one harmless survivor.** Decisions taken while writing i
 - **`judge`, `cycle`, `official` and `sitting` moved to `tests/exams/conftest.py`** so the new
   file can use them. `test_enrolment.py` keeps its own `judge` and `official`, which shadow them.
 
-**Remaining:** the admin view (upload with a cycle chooser → preview → confirm), with
-`test_a_dry_run_writes_nothing` and Task 10's rule of branching on parse errors before
-diffing; then the catalogue entries and the sweep.
+**Progress 2026-11-07: upload and preview landed; confirm remains.** Three commits, each
+test shown red and each review mutant killed:
+
+- **`b56da69` — `CertificationAdmin`, locked.** `Certification` had no admin at all, so
+  the import had nowhere to hang. Add, change and delete all return `False`: an
+  editable certification is a deletable floor for the next cycle. Each guard was first
+  registered *unlocked* so its test went red against the permission rather than against
+  `NoReverseMatch`. One mutant per guard, one killer per mutant.
+- **`3a955f3` — `to_session` / `from_session`.** Round-trips through real JSON. Mutants
+  killed: list instead of tuple for a pair, `supercedes` dropped, pair swapped. Every
+  row goes through `_row_from_dict`; `CategoryRow(**row)` left `category` an `int`, which
+  no test can see because `Category` is an `IntEnum`, so that was consistency, not a fix.
+- **`ea196d0` — the upload view and preview.** `CategoryImportForm` with a `FileField`
+  and a `ModelChoiceField` for the cycle. Five tests in `tests/exams/test_category_import_admin.py`.
+  Findings:
+  - **The GET test asserts the cycle's name, not `name="cycle"`** — an empty `<select>`
+    passes the latter. `Cycle.objects.none()` is the mutant.
+  - **The supersede test asserts the whole line `SAGF-0001: 2 → 1`.** The id alone
+    passed against `diff_categories([], parsed)`, because ignoring stored rows moves the
+    judge into *Added*, where the id still prints. The line also kills the template
+    swapping `stored, incoming`.
+  - **The error branch has no visible effect on the page.** Without `if not errors`, the
+    view diffs `[]` into an empty `CategoryChanges`, which renders no headings: measured,
+    the two pages are identical. Unlike the roster there is no *remove*, so nothing is
+    destructive. The test asserts `response.context["preview"] is None`, the only place
+    the difference exists; it matters once confirm's session write sits in that branch.
+  - The error test first uploaded `INVALID,1` and went red for the wrong reason:
+    `parse_categories` does not check the shape of an `sagf_id`, so the file was valid.
+
+**Remaining:** confirm — the session write inside the `not errors` branch (`to_session`
+plus the cycle's pk), a POST-only confirm URL, `official=request.user`, `date` from
+`timezone.localdate()`, the stale check via `confirm_categories`, and nothing-waiting.
+Then the catalogue entries and the sweep. **Also noted, not urgent:** the `Sitting` delete
+test (`test_admin.py`, `test_a_sitting_cannot_be_deleted_through_the_admin`) asserts
+only `exists()`, which a malformed payload satisfies; it wants the `403` the new
+certification delete test asserts — a `test(exams):` backfill.
 
 | test | asserts |
 |---|---|
